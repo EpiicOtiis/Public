@@ -140,3 +140,4 @@ Write-Host ""
 Write-Host "Script completed at $(Get-Date)" -ForegroundColor Yellow
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
+Read-Host "Press Enter to exit"
