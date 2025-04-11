@@ -275,3 +275,4 @@ if ($problematicPartners.Count -gt 0) {
 
 Write-Host "`n--- Script Finished ---" -ForegroundColor Cyan
 Write-Verbose "AD Replication Health Check script completed."
+Read-Host "Press Enter to exit"
