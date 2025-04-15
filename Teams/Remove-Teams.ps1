@@ -26,7 +26,7 @@ $users = Get-ChildItem -Path "C:\Users" -Directory
 foreach ($user in $users) {
     $teamsPath = "$($user.FullName)\AppData\Local\Microsoft\Teams"
     $updateExePath = "$teamsPath\Update.exe"
-    if (Test-Path "$teamsPath\Current\Teams.exe" -and Test-Path $updateExePath) {
+    if (Test-Path "$teamsPath\Current\Teams.exe" -and (Test-Path $updateExePath)) {
         Write-Host "Uninstalling Teams for user: $($user.Name)"
         try {
             Start-Process -FilePath $updateExePath -ArgumentList "--uninstall /s" -Wait -NoNewWindow
