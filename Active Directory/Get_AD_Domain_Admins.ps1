@@ -1,3 +1,11 @@
+<# (Get_AD_Domain_Admins.ps1) :: (Revision # 1)/Aaron Pleus - (06/4/2025)
+
+   This script, like all scripts developed by Aaron Pleus, unless otherwise explicitly stated, is the copyrighted property of Aaron Pleus.;
+   it may not be shared, sold, or distributed whole or in part, even with modifications applied, for any reason. this includes on reddit, on discord, or as part of other RMM tools.
+   	
+   The moment you edit this script it becomes your own risk and Aaron Pleus will not provide assistance with it.
+#>
+
 #Requires -Module ActiveDirectory
 
 # Get the Domain Admins group members
