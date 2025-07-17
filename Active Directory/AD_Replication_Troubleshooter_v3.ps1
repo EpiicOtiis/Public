@@ -76,7 +76,7 @@ function Run-RepadminCommands {
 function Run-DCDiagTests {
     Write-Host "`n=== DCDiag Replication Tests ===" -ForegroundColor Green
     try {
-        $dcdiag = dcdiag /test:Replication /v
+        $dcdiag = dcdiag /test:replications /v
         $dcdiag | ForEach-Object { Write-Host $_ }
     } catch {
         Write-Host "Error running dcdiag /test:Replication: $_" -ForegroundColor Red
