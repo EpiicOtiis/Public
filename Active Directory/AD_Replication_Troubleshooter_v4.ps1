@@ -155,3 +155,15 @@ function Check-EventViewerErrors {
 
 # Main script execution
 Write-Host "=== Active Directory Replication Troubleshooting Script ===" -ForegroundColor Cyan
+
+# Execute steps if domain controllers are found
+if ($dcs) {
+    Run-RepadminCommands
+    Run-DCDiagTests
+    Check-EventViewerErrors
+} else {
+    Write-Host "Skipping replication and diagnostic tests due to no domain controllers found." -ForegroundColor Yellow
+}
+
+Write-Host "`n=== Troubleshooting Complete ===" -ForegroundColor Cyan
+Write-Host "Review the output above for any errors or warnings." -ForegroundColor Yellow
