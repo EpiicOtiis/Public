@@ -10,7 +10,8 @@
 
 ## Domain Controller Identification: 
 # Lists all servers in Active Directory sites, including their DNS hostnames and IP addresses.
-# Identifies the domain and whether each server is a Global Catalog (GC) server.
+# Identifies which servers are Domain Controllers and if they are a Global Catalog (GC).
+# Handles errors for individual servers without stopping the entire script.
 ### Replication Diagnostics:
 # Runs repadmin /replsummary to show a summary of replication status.
 # Runs repadmin /queue to display pending replication tasks.
@@ -34,6 +35,8 @@ Write-Host "=== Active Directory Replication Troubleshooting Script ===" -Foregr
 Write-Host "`n=== Collecting AD Site and Server Information ===" -ForegroundColor Cyan
 $serverInfo = @()
 $domainControllers = @()
+
+# This outer try-catch will handle critical errors, like not being able to contact AD at all.
 try {
     # Get the configuration naming context dynamically
     $ConfigPartition = (Get-ADRootDSE).configurationNamingContext
@@ -44,35 +47,57 @@ try {
     # Iterate through each site to find servers
     foreach ($site in $sites) {
         $serversInSite = Get-ADObject -Filter { objectClass -eq "server" } -SearchBase "CN=Servers,$($site.DistinguishedName)" -Properties Name, dNSHostName -ErrorAction Stop
+        
         foreach ($server in $serversInSite) {
-            $isDC = $false
-            $domain = "N/A"
-            $isGC = "N/A"
-            
-            # Check if the server is a domain controller
-            $dc = Get-ADDomainController -Identity $server.Name -ErrorAction SilentlyContinue
-            if ($dc) {
-                $isDC = $true
-                $domain = $dc.Domain
-                $isGC = $dc.IsGlobalCatalog
-                $domainControllers += $dc
-            }
+            # This inner try-catch handles errors for a SINGLE server, allowing the loop to continue.
+            try {
+                $isDC = $false
+                $domain = "N/A"
+                $isGC = "N/A"
+                $dcStatus = "OK"
 
-            # Attempt to resolve the IP address for the server's DNS hostname
-            $ipAddress = try {
-                (Resolve-DnsName -Name $server.dNSHostName -Type A -ErrorAction Stop).IPAddress
-            } catch {
-                "Unresolvable"
+                # Check if the server is a domain controller.
+                # If Get-ADDomainController fails, the CATCH block will handle it.
+                $dc = Get-ADDomainController -Identity $server.Name -ErrorAction Stop
+                
+                if ($dc) {
+                    $isDC = $true
+                    $domain = $dc.Domain
+                    $isGC = $dc.IsGlobalCatalog
+                    $domainControllers += $dc
+                }
+
+                # Attempt to resolve the IP address for the server's DNS hostname
+                $ipAddress = try {
+                    (Resolve-DnsName -Name $server.dNSHostName -Type A -ErrorAction Stop).IPAddress
+                } catch {
+                    "Unresolvable"
+                }
+                
+                $serverInfo += [PSCustomObject]@{
+                    SiteName     = $site.Name
+                    ServerName   = $server.Name
+                    DNSHostName  = $server.dNSHostName
+                    IPAddress    = $ipAddress
+                    IsDomainController = $isDC
+                    Domain       = $domain
+                    IsGlobalCatalog = $isGC
+                    Status       = $dcStatus
+                }
             }
-            
-            $serverInfo += [PSCustomObject]@{
-                SiteName     = $site.Name
-                ServerName   = $server.Name
-                DNSHostName  = $server.dNSHostName
-                IPAddress    = $ipAddress
-                IsDomainController = $isDC
-                Domain       = $domain
-                IsGlobalCatalog = $isGC
+            catch {
+                # This block now catches the error for a single server and reports it.
+                # The script will then continue to the next server in the list.
+                $serverInfo += [PSCustomObject]@{
+                    SiteName     = $site.Name
+                    ServerName   = $server.Name
+                    DNSHostName  = $server.dNSHostName
+                    IPAddress    = "N/A"
+                    IsDomainController = $false
+                    Domain       = "N/A"
+                    IsGlobalCatalog = "N/A"
+                    Status       = "ERROR: Not a DC or unreachable."
+                }
             }
         }
     }
@@ -85,48 +110,28 @@ try {
         Write-Host "No servers found in AD sites." -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "Error retrieving AD site servers: $_" -ForegroundColor Red
+    Write-Host "A critical error occurred while retrieving AD site information: $_" -ForegroundColor Red
 }
 
 # --- Replication Diagnostics ---
 function Run-RepadminCommands {
     Write-Host "`n=== Replication Summary (repadmin /replsummary) ===" -ForegroundColor Green
-    try {
-        repadmin /replsummary
-    } catch {
-        Write-Host "Error running repadmin /replsummary: $_" -ForegroundColor Red
-    }
+    try { repadmin /replsummary } catch { Write-Host "Error running repadmin /replsummary: $_" -ForegroundColor Red }
 
     Write-Host "`n=== Replication Queue (repadmin /queue) ===" -ForegroundColor Green
-    try {
-        repadmin /queue
-    } catch {
-        Write-Host "Error running repadmin /queue: $_" -ForegroundColor Red
-    }
+    try { repadmin /queue } catch { Write-Host "Error running repadmin /queue: $_" -ForegroundColor Red }
 
     Write-Host "`n=== Replication Sync Status (repadmin /syncall) ===" -ForegroundColor Green
-    try {
-        repadmin /syncall /e /d
-    } catch {
-        Write-Host "Error running repadmin /syncall: $_" -ForegroundColor Red
-    }
+    try { repadmin /syncall /e /d } catch { Write-Host "Error running repadmin /syncall: $_" -ForegroundColor Red }
 }
 
 # --- DCDiag Tests ---
 function Run-DCDiagTests {
     Write-Host "`n=== DCDiag Replication Tests ===" -ForegroundColor Green
-    try {
-        dcdiag /test:replications /v
-    } catch {
-        Write-Host "Error running dcdiag /test:Replication: $_" -ForegroundColor Red
-    }
+    try { dcdiag /test:replications /v } catch { Write-Host "Error running dcdiag /test:Replication: $_" -ForegroundColor Red }
 
     Write-Host "`n=== DCDiag General Tests ===" -ForegroundColor Green
-    try {
-        dcdiag /v
-    } catch {
-        Write-Host "Error running dcdiag: $_" -ForegroundColor Red
-    }
+    try { dcdiag /v } catch { Write-Host "Error running dcdiag: $_" -ForegroundColor Red }
 }
 
 # --- Event Viewer Check ---
@@ -134,13 +139,12 @@ function Check-EventViewerErrors {
     Write-Host "`n=== Event Viewer Replication Errors (Last 24 Hours) ===" -ForegroundColor Green
     $startTime = (Get-Date).AddHours(-24)
     try {
-        # Common AD replication event IDs
         $replicationEventIDs = 1000, 1004, 1006, 1311, 1388, 1865, 1925, 1926, 1988, 2103
         
         $events = Get-WinEvent -FilterHashtable @{
             LogName   = 'Directory Service'
             StartTime = $startTime
-            Level     = 2, 3  # Error and Warning
+            Level     = 2, 3
             Id        = $replicationEventIDs
         } -ErrorAction Stop
 
@@ -156,6 +160,7 @@ function Check-EventViewerErrors {
 }
 
 # --- Execute Diagnostic Steps ---
+# This part now works correctly because the script will no longer halt on a single server error.
 if ($domainControllers) {
     Run-RepadminCommands
     Run-DCDiagTests
