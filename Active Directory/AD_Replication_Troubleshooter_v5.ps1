@@ -1,26 +1,35 @@
 <# 
-(AD_Replication_Troubleshooter.ps1) :: (Revision # 4)/Aaron Pleus - (07/21/2025)
+(AD_Replication_Troubleshooter.ps1) :: (Revision # 5)/Aaron Pleus - (07/23/2025)
 
    This script, like all scripts developed by Aaron Pleus, unless otherwise explicitly stated, is the copyrighted property of Aaron Pleus.;
    it may not be shared, sold, or distributed whole or in part, even with modifications applied, for any reason. this includes on reddit, on discord, or as part of other RMM tools.
    	
    The moment you edit this script it becomes your own risk and Aaron Pleus will not provide assistance with it.
 
-# This script does the following:
+This script does the following:
 
-## Domain Controller Identification: 
+Domain Controller Identification:
 # Lists all servers in Active Directory sites, including their DNS hostnames and IP addresses.
 # Identifies which servers are Domain Controllers and if they are a Global Catalog (GC).
 # Handles errors for individual servers without stopping the entire script.
-### Replication Diagnostics:
+
+FSMO Role Check:
+# Identifies and displays the holders of the five FSMO roles (both forest-wide and domain-wide).
+
+Replication Diagnostics:
 # Runs repadmin /replsummary to show a summary of replication status.
 # Runs repadmin /queue to display pending replication tasks.
 # Runs repadmin /syncall /e /d to check synchronization status across all domain controllers.
-### DCDiag Tests:
+
+DCDiag Tests:
 # Executes dcdiag /test:Replication to specifically test replication.
 # Runs a general dcdiag /v for broader diagnostic information.
-# Event Viewer Check: Queries the "Directory Service" log for errors and warnings related to replication from the last 24 hours.
-# Error Handling: Includes try-catch blocks to handle potential errors gracefully and provide feedback.
+
+Event Viewer Check:
+# Queries the "Directory Service" log for errors and warnings related to replication from the last 24 hours.
+
+Error Handling:
+# Includes try-catch blocks to handle potential errors gracefully and provide feedback.
 #>
 
 #requires -RunAsAdministrator
@@ -113,6 +122,32 @@ try {
     Write-Host "A critical error occurred while retrieving AD site information: $_" -ForegroundColor Red
 }
 
+# --- FSMO Role Check ---
+function Get-FSMORoles {
+    Write-Host "`n=== FSMO Role Holders ===" -ForegroundColor Green
+    try {
+        # Get the forest-wide FSMO roles
+        $forest = Get-ADForest
+        Write-Host "Forest-wide FSMO Roles:"
+        Write-Host "-----------------------"
+        Write-Host "Schema Master        : $($forest.SchemaMaster)"
+        Write-Host "Domain Naming Master : $($forest.DomainNamingMaster)"
+        Write-Host ""
+
+        # Get the domain-specific FSMO roles
+        $domain = Get-ADDomain
+        Write-Host "Domain-wide FSMO Roles:"
+        Write-Host "----------------------"
+        Write-Host "PDC Emulator         : $($domain.PDCEmulator)"
+        Write-Host "RID Master           : $($domain.RIDMaster)"
+        Write-Host "Infrastructure Master: $($domain.InfrastructureMaster)"
+    }
+    catch {
+        Write-Host "Error retrieving FSMO roles: $_" -ForegroundColor Red
+    }
+}
+
+
 # --- Replication Diagnostics ---
 function Run-RepadminCommands {
     Write-Host "`n=== Replication Summary (repadmin /replsummary) ===" -ForegroundColor Green
@@ -144,7 +179,7 @@ function Check-EventViewerErrors {
         $events = Get-WinEvent -FilterHashtable @{
             LogName   = 'Directory Service'
             StartTime = $startTime
-            Level     = 2, 3
+            Level     = 2, 3 # 2 for Error, 3 for Warning
             Id        = $replicationEventIDs
         } -ErrorAction Stop
 
@@ -162,11 +197,15 @@ function Check-EventViewerErrors {
 # --- Execute Diagnostic Steps ---
 # This part now works correctly because the script will no longer halt on a single server error.
 if ($domainControllers) {
+    # Run the FSMO Role check
+    Get-FSMORoles
+    
+    # Run the rest of the diagnostics
     Run-RepadminCommands
     Run-DCDiagTests
     Check-EventViewerErrors
 } else {
-    Write-Host "`nSkipping replication and diagnostic tests because no domain controllers were identified." -ForegroundColor Yellow
+    Write-Host "`nSkipping FSMO, replication, and diagnostic tests because no domain controllers were identified." -ForegroundColor Yellow
 }
 
 Write-Host "`n=== Troubleshooting Complete ===" -ForegroundColor Cyan
