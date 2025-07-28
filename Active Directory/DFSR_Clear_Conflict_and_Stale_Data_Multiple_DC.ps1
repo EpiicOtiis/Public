@@ -153,7 +153,17 @@ catch {
     Write-Log "Error verifying SYSVOL share: $($_.Exception.Message)"
 }
 
-# Step 8: Run DCDIAG to check SYSVOL health
+# Step 8: Force DFSR to poll Active Directory
+Write-Log "Forcing DFSR to poll Active Directory configuration..."
+try {
+    $dfsrdiagOutput = dfsrdiag pollad | Out-String -Width 120
+    Write-Log "dfsrdiag pollad executed successfully.`nOutput:`n$dfsrdiagOutput"
+}
+catch {
+    Write-Log "Error running dfsrdiag pollad: $($_.Exception.Message)"
+}
+
+# Step 9: Run DCDIAG to check SYSVOL health
 Write-Log "Running DCDIAG to verify SYSVOL health..."
 try {
     # Run dcdiag and capture output
