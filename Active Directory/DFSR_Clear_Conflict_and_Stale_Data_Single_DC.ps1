@@ -10,8 +10,11 @@ This script does the following:
 # Clears DFSR Conflict and Stale Data on a single Domain Controller
 # Backs up the SYSVOL folder before making changes
 # Stops the DFSR service, deletes ConflictAndDeleted folder and Dfsr.db, sets SYSVOL to authoritative, and restarts the DFSR service
-# Verifies SYSVOL share and runs DCDIAG to check SYSVOL health
-#requires -RunAsAdministrator
+# Verifies SYSVOL share 
+# Forces DFSR to poll Active Directory for configuration changes
+# Runs DCDIAG to check SYSVOL health
+
+# Script Requires -RunAsAdministrator
 #>
 
 
@@ -136,7 +139,17 @@ catch {
     Write-Log "Error verifying SYSVOL share: $($_.Exception.Message)"
 }
 
-# Step 7: Run DCDIAG to check SYSVOL health
+# Step 7: Force DFSR to poll Active Directory
+Write-Log "Forcing DFSR to poll Active Directory configuration..."
+try {
+    $dfsrdiagOutput = dfsrdiag pollad | Out-String -Width 120
+    Write-Log "dfsrdiag pollad executed successfully.`nOutput:`n$dfsrdiagOutput"
+}
+catch {
+    Write-Log "Error running dfsrdiag pollad: $($_.Exception.Message)"
+}
+
+# Step 8: Run DCDIAG to check SYSVOL health
 Write-Log "Running DCDIAG to verify SYSVOL health..."
 try {
     # Run dcdiag and capture output
