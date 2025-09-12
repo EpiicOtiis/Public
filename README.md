@@ -44,7 +44,3 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 # Microsoft 365
 
 ## Exchange
-
-### Create Direct_Send_Monitoring_MS_Spam Transport Rule Script:
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13;`
-iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Exchange/Direct_Send_Monitoring_MS_Spam.ps1'))
