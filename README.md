@@ -22,7 +22,7 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 ### Get_AD_Domain_Admins.ps1
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/Get_AD_Domain_Admins.ps1'))
 
-## Get_AD_Domain_Users.ps1 (Exports output to C:\ADUserInfo.csv)
+### Get_AD_Domain_Users.ps1 (Exports output to C:\ADUserInfo.csv)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/Get_AD_Domain_Admins.ps1'))
 
 # Application Scripts
@@ -40,3 +40,11 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 
 ### Folder-Permissions-Scanner.ps1
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows_System_Info/Folder-Permissions-Scanner.ps1'))
+
+# Microsoft 365
+
+## Exchange
+
+### Create Direct_Send_Monitoring_MS_Spam Transport Rule Script:
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13;`
+iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Exchange/Direct_Send_Monitoring_MS_Spam.ps1'))
