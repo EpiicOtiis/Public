@@ -116,7 +116,7 @@ for ($i = 1; $i -le $maxRetries; $i++) {
             break
         }
     } catch {
-        Write-Host ('Attempt ' + $i + '/' + $maxRetries + ': Rule not yet found. Waiting ' + $retryInterval + ' seconds...')
+        Write-Host ("Attempt ${i}/${maxRetries}: Rule not yet found. Waiting ${retryInterval} seconds...")
         Start-Sleep -Seconds $retryInterval
     }
 }
