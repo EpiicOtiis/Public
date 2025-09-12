@@ -27,7 +27,7 @@ if (-not $module) {
     $installPrompt = Read-Host "ExchangeOnlineManagement module is not installed. Do you want to install it? (Y/N)"
     if ($installPrompt -eq 'Y' -or $installPrompt -eq 'y') {
         Write-Host "Installing ExchangeOnlineManagement module..."
-        Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser
+        Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser -ErrorAction Stop
         Write-Host "Module installed successfully."
     } else {
         Write-Host "Module installation skipped. Script cannot proceed without ExchangeOnlineManagement."
@@ -40,7 +40,7 @@ if (-not $module) {
         $updatePrompt = Read-Host "A newer version ($latestVersion) of ExchangeOnlineManagement is available (installed: $installedVersion). Update now? (Y/N)"
         if ($updatePrompt -eq 'Y' -or $updatePrompt -eq 'y') {
             Write-Host "Updating ExchangeOnlineManagement module..."
-            Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser
+            Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser -ErrorAction Stop
             Write-Host "Module updated successfully."
         }
     } else {
@@ -62,33 +62,71 @@ if (-not $internalDomain -or -not $adminEmail) {
 $mxEndpoint = "$($internalDomain.Split('.')[0])-com.mail.protection.outlook.com"
 
 # Connect to Exchange Online
-Connect-ExchangeOnline -UserPrincipalName $adminEmail
+try {
+    Connect-ExchangeOnline -UserPrincipalName $adminEmail -ErrorAction Stop
+} catch {
+    Write-Host "Error connecting to Exchange Online: $_"
+    Write-Host "Ensure you have Exchange Admin permissions and correct credentials."
+    exit
+}
 
 # Define parameters for the transport rule
 $ruleName = "MS Audit Direct Delivery"
 $ruleComments = "Monitors inbound emails with internal sender domain, external IP, and anonymous authentication for Direct Send detection"
-$subjectPrefix = "MS Audit Direct Delivery"
+$subjectPrefix = "MS Audit Direct Delivery"  # Adjust to "MS Audit Direct Delivery" if preferred
 
-# Create the transport rule
-New-TransportRule -Name $ruleName `
-    -Comments $ruleComments `
-    -Mode AuditAndNotify `
-    -FromScope NotInOrganization `
-    -SentToScope InOrganization `
-    -MessageHeaderMatchesPatterns @{ Header = "X-MS-Exchange-Organization-AuthAs"; Patterns = @("Anonymous") } `
-    -SenderDomainIs $internalDomain `
-    -PrependSubject $subjectPrefix `
-    -BccMessage $adminEmail `
-    -GenerateIncidentReport $adminEmail `
-    -IncidentReportContent @("Sender", "Recipient", "Subject", "Message-Id", "Received", "ClientIP") `
-    -Priority 0 `
-    -Enabled $true
+# Create the transport rule with corrected parameters
+try {
+    New-TransportRule -Name $ruleName `
+        -Comments $ruleComments `
+        -Mode AuditAndNotify `
+        -FromScope NotInOrganization `
+        -SentToScope InOrganization `
+        -HeaderMatchesMessageHeader "X-MS-Exchange-Organization-AuthAs" `
+        -HeaderMatchesPatterns @("Anonymous") `
+        -SenderDomainIs $internalDomain `
+        -PrependSubject $subjectPrefix `
+        -BccMessage $adminEmail `
+        -GenerateIncidentReport $adminEmail `
+        -IncidentReportContent @("Sender", "Recipient", "Subject", "Message-Id", "Received", "ClientIP") `
+        -Priority 0 `
+        -Enabled $true `
+        -ErrorAction Stop
+    Write-Host "Transport rule '$ruleName' creation command executed."
+} catch {
+    Write-Host "Error creating transport rule: $_"
+    Write-Host "Check permissions or parameter syntax. Rule may not have been created."
+    Disconnect-ExchangeOnline -Confirm:$false
+    exit
+}
 
-# Verify the rule was created
-Get-TransportRule -Identity $ruleName | Format-List Name, State, Mode, Priority, FromScope, SentToScope, MessageHeaderMatchesPatterns, SenderDomainIs, PrependSubject, BccMessage, GenerateIncidentReport
+# Verify rule creation and wait for propagation (up to 5 minutes)
+Write-Host "Verifying rule creation (may take up to 30 minutes to appear in EAC)..."
+$maxRetries = 5
+$retryInterval = 60  # seconds
+$ruleFound = $false
 
-# Output confirmation
-Write-Host "Transport rule '$ruleName' created successfully. Check rule hits in EAC under Mail flow > Rule reports."
+for ($i = 1; $i -le $maxRetries; $i++) {
+    try {
+        $rule = Get-TransportRule -Identity $ruleName -ErrorAction Stop | Format-List Name, State, Mode, Priority, FromScope, SentToScope, HeaderMatchesMessageHeader, HeaderMatchesPatterns, SenderDomainIs, PrependSubject, BccMessage, GenerateIncidentReport
+        if ($rule) {
+            Write-Host "Rule '$ruleName' confirmed created. Details:"
+            $rule
+            $ruleFound = $true
+            break
+        }
+    } catch {
+        Write-Host "Attempt $i/$maxRetries: Rule not yet found. Waiting $retryInterval seconds..."
+        Start-Sleep -Seconds $retryInterval
+    }
+}
+
+if (-not $ruleFound) {
+    Write-Host "Error: Rule '$ruleName' not found after $maxRetries attempts. Check EAC manually at https://admin.exchange.microsoft.com/#/transportrules."
+    Write-Host "Possible causes: Insufficient permissions, server propagation delay, or creation failure."
+} else {
+    Write-Host "Rule is created. Check EAC (Mail flow > Rules) to confirm visibility after up to 30 minutes."
+}
 
 # Prompt for sending a test Direct Send email
 $testPrompt = Read-Host "Would you like to send a test Direct Send email to verify the rule? (Y/N)"
