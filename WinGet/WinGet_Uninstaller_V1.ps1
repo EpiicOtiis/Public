@@ -66,8 +66,8 @@ Write-Host "`n--- Listing Installed Winget Packages ---" -ForegroundColor Cyan
 Write-Host "Below is a list of packages Winget can manage. Note the 'Id' or 'Name' of the software you wish to uninstall." -ForegroundColor DarkCyan
 
 # Run 'winget list' and capture its output
-# Added --disable-interactivity and 2>$null to suppress all progress output and error stream messages.
-$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity 2>$null)
+# Added --disable-interactivity to suppress progress bars and other interactive elements.
+$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity)
 
 if ($InstalledPackagesRaw) {
     # Display the list to the user
@@ -81,8 +81,10 @@ if ($InstalledPackagesRaw) {
         Write-Host "Attempting to uninstall '$PackageToUninstall'..." -ForegroundColor Yellow
         Try {
             # Execute the uninstall command
-            # Added 2>$null to the uninstall command to suppress any progress/error output from its execution.
-            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h --disable-interactivity 2>$null
+            # Removed '--accept-package-agreements' as it's not supported by winget uninstall v1.11.510
+            # Kept '--accept-source-agreements' as it's a generally safe flag and might be supported for some uninstall scenarios
+            # Added --disable-interactivity for uninstall as well, to prevent any unexpected interactive prompts.
+            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h --disable-interactivity
             Write-Host "Successfully initiated uninstall for '$PackageToUninstall'." -ForegroundColor Green
         }
         Catch {
