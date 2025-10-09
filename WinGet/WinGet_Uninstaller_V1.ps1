@@ -11,6 +11,10 @@ $dc.UseDefaultCredentials = $true
 $dc.Headers.Add("user-agent", "Internet Explorer")
 $dc.Headers.Add("X-FORMS_BASED_AUTH_ACCEPTED", "f")
 
+# Fix console encoding for winget output
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:TERM = "dumb"
+
 # Temporary Installer Directory Configuration
 $InstallerFolder = Join-Path -Path $env:ProgramData -ChildPath 'CustomScripts'
 if (-not (Test-Path -Path $InstallerFolder)) {
@@ -67,7 +71,7 @@ Write-Host "Below is a list of packages Winget can manage. Note the 'Id' or 'Nam
 
 # Run 'winget list' and capture its output
 # Added --disable-interactivity to suppress progress bars and other interactive elements.
-$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity)
+$InstalledPackagesRaw = & ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream | Where-Object { $_ -and $_ -notmatch '^\s*[-\\/|─]' }
 
 if ($InstalledPackagesRaw) {
     # Display the list to the user
