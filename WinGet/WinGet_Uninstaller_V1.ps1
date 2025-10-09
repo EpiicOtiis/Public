@@ -22,8 +22,6 @@ Write-Host "Checking if Winget is installed" -ForegroundColor Yellow
 $TestWinget = Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -eq "Microsoft.DesktopAppInstaller"}
 
 # If Winget is not installed or version is too old, download and install Winget
-# Note: The version check here is for the App Installer package, not necessarily the winget CLI version itself.
-# Modern versions of Winget usually come with Windows updates.
 if (-not $TestWinget -or ([Version]$TestWinget.Version -le [Version]"2022.506.16.0")) {
     # Download Winget MSIXBundle
     Write-Host "WinGet is not installed or needs update. Downloading WinGet..."
@@ -68,8 +66,8 @@ Write-Host "`n--- Listing Installed Winget Packages ---" -ForegroundColor Cyan
 Write-Host "Below is a list of packages Winget can manage. Note the 'Id' or 'Name' of the software you wish to uninstall." -ForegroundColor DarkCyan
 
 # Run 'winget list' and capture its output
-# Using --accept-source-agreements here just in case, though it might not be strictly necessary for 'list'
-$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements)
+# Added --disable-interactivity to suppress progress bars and other interactive elements.
+$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity)
 
 if ($InstalledPackagesRaw) {
     # Display the list to the user
@@ -85,7 +83,8 @@ if ($InstalledPackagesRaw) {
             # Execute the uninstall command
             # Removed '--accept-package-agreements' as it's not supported by winget uninstall v1.11.510
             # Kept '--accept-source-agreements' as it's a generally safe flag and might be supported for some uninstall scenarios
-            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h
+            # Added --disable-interactivity for uninstall as well, to prevent any unexpected interactive prompts.
+            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h --disable-interactivity
             Write-Host "Successfully initiated uninstall for '$PackageToUninstall'." -ForegroundColor Green
         }
         Catch {
