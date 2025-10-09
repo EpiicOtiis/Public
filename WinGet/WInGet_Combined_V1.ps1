@@ -1,4 +1,4 @@
-<# (WinGet_Combined_V1) :: (Revision # 2)/Aaron Pleus, (10/09/2025)
+<# (WinGet_Combined_V1) :: (Revision # 1)/Aaron Pleus, (10/09/2025)
 
    This script, like all scripts developed by Aaron Pleus, unless otherwise explicitly stated, is the copyrighted property of Aaron Pleus/Integris IT.;
    it may not be shared, sold, or distributed whole or in part, even with modifications applied, for any reason. this includes on reddit, on discord, or as part of other RMM tools.
