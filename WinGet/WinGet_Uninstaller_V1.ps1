@@ -65,12 +65,19 @@ Set-Location -Path $WingetExeDirectory
 Write-Host "`n--- Listing Installed Winget Packages ---" -ForegroundColor Cyan
 Write-Host "Below is a list of packages Winget can manage. Note the 'Id' or 'Name' of the software you wish to uninstall." -ForegroundColor DarkCyan
 
-# Run 'winget list' and capture its output
-# Added --disable-interactivity and 2>$null to suppress all progress output and error stream messages.
-$InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity 2>$null)
+# Execute winget list, capture all output (stdout and stderr) into a single array of strings.
+# Then, filter out lines that appear to be progress bars or spinners.
+$WingetListOutput = & ".\winget.exe" list --source winget --accept-source-agreements --disable-interactivity 2>&1 | Out-String | ConvertFrom-String -Delimiter "`n"
+
+# Filter out lines that match known spinner/progress bar patterns or are empty/whitespace
+$InstalledPackagesRaw = $WingetListOutput | Where-Object {
+    $_ -notmatch '^\s*[-/\\]+\s*$' -and                                  # Filters out lines like -, \, /, | (spinners)
+    $_ -notmatch '^[\x00-\x1F\x7F-\xFF]+[\s\dKBM/]+\s*$' -and             # Filters out lines with unicode progress bars like Γûê with KB/MB info
+    $_ -notmatch '^\s*$'                                                # Filters out empty or whitespace-only lines
+}
 
 if ($InstalledPackagesRaw) {
-    # Display the list to the user
+    # Display the filtered list to the user
     $InstalledPackagesRaw | ForEach-Object { Write-Host $_ }
     Write-Host "-------------------------------------`n" -ForegroundColor DarkCyan
 
@@ -80,9 +87,8 @@ if ($InstalledPackagesRaw) {
     if (-not [string]::IsNullOrWhiteSpace($PackageToUninstall)) {
         Write-Host "Attempting to uninstall '$PackageToUninstall'..." -ForegroundColor Yellow
         Try {
-            # Execute the uninstall command
-            # Added 2>$null to the uninstall command to suppress any progress/error output from its execution.
-            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h --disable-interactivity 2>$null
+            # Execute the uninstall command, redirecting all output to null for silence
+            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h --disable-interactivity 2>&1 | Out-Null
             Write-Host "Successfully initiated uninstall for '$PackageToUninstall'." -ForegroundColor Green
         }
         Catch {
@@ -93,7 +99,7 @@ if ($InstalledPackagesRaw) {
         Write-Host "No package specified for uninstallation. Skipping uninstallation." -ForegroundColor Yellow
     }
 } else {
-    Write-Host "Could not retrieve list of installed Winget packages." -ForegroundColor Red
+    Write-Host "Could not retrieve list of installed Winget packages, or all output was filtered out. Please check Winget's status." -ForegroundColor Red
 }
 
 # Countdown for 30 seconds
