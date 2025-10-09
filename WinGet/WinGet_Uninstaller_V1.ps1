@@ -22,6 +22,8 @@ Write-Host "Checking if Winget is installed" -ForegroundColor Yellow
 $TestWinget = Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -eq "Microsoft.DesktopAppInstaller"}
 
 # If Winget is not installed or version is too old, download and install Winget
+# Note: The version check here is for the App Installer package, not necessarily the winget CLI version itself.
+# Modern versions of Winget usually come with Windows updates.
 if (-not $TestWinget -or ([Version]$TestWinget.Version -le [Version]"2022.506.16.0")) {
     # Download Winget MSIXBundle
     Write-Host "WinGet is not installed or needs update. Downloading WinGet..."
@@ -66,6 +68,7 @@ Write-Host "`n--- Listing Installed Winget Packages ---" -ForegroundColor Cyan
 Write-Host "Below is a list of packages Winget can manage. Note the 'Id' or 'Name' of the software you wish to uninstall." -ForegroundColor DarkCyan
 
 # Run 'winget list' and capture its output
+# Using --accept-source-agreements here just in case, though it might not be strictly necessary for 'list'
 $InstalledPackagesRaw = (& ".\winget.exe" list --source winget --accept-source-agreements)
 
 if ($InstalledPackagesRaw) {
@@ -80,8 +83,9 @@ if ($InstalledPackagesRaw) {
         Write-Host "Attempting to uninstall '$PackageToUninstall'..." -ForegroundColor Yellow
         Try {
             # Execute the uninstall command
-            # Using -e (exact) for better precision, --id or --name can also be used if needed
-            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements --accept-package-agreements -h
+            # Removed '--accept-package-agreements' as it's not supported by winget uninstall v1.11.510
+            # Kept '--accept-source-agreements' as it's a generally safe flag and might be supported for some uninstall scenarios
+            & ".\winget.exe" uninstall "$PackageToUninstall" -e --accept-source-agreements -h
             Write-Host "Successfully initiated uninstall for '$PackageToUninstall'." -ForegroundColor Green
         }
         Catch {
