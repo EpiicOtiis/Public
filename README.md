@@ -53,7 +53,7 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows_System_Info/Folder-Permissions-Scanner_V3.ps1'))
 
 ### System_Info_Events_24.ps1
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows_System_Info/Get-Drive-Info.ps1'))
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows%20Troubleshooting/System_Info_Events_24_Hours.ps1'))
 
 # Microsoft 365
 
