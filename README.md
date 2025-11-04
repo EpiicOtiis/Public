@@ -52,6 +52,9 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 #### This version will include folder owner in the output
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows_System_Info/Folder-Permissions-Scanner_V3.ps1'))
 
+### Time_Sync_Repair.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows_System_Info/Folder-Permissions-Scanner_V3.ps1'))
+
 
 # Microsoft 365
 
