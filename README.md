@@ -58,6 +58,12 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 ### One_Time_Reboot_Scheduler.ps1
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
 
+# VMWare
+
+## Tools
+
+### VMWare_Tools_Updater.ps1
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
 
 # Microsoft 365
 
