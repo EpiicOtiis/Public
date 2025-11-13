@@ -336,7 +336,7 @@ function Restart-Computer-Immediate {
 function Schedule-OneTimeReboot {
     Write-Host "Launching the One-Time Reboot Scheduler script..." -ForegroundColor Cyan
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
     }
     catch {
         Write-Error "Failed to download and execute the script from GitHub."
