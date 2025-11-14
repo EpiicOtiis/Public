@@ -175,7 +175,7 @@ if ($rebootConfirmation -eq 'y') {
     Write-Host "Scheduling a one-time reboot..."
     try {
         # The SecurityProtocol line is already at the top of the script, so it's not needed here again.
-        iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Windows%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
+        iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
     }
     catch {
         Write-Warning "Failed to download and execute the reboot scheduler script. Error: $($_.Exception.Message)"
