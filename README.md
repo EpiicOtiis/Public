@@ -15,8 +15,7 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercon
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13;
 iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/DFSR_Clear_Conflict_and_Stale_Data_Multiple_DC.ps1'))
 
-### Run DFSR_Authoritative_Restore_Single_DC Script:
-#### This script performs an authoritative restore of the SYSVOL folder on a single Domain Controller. It is designed to fix DFSR errors caused by the server being offline or isolated for longer than the 'MaxOfflineTimeInDays' threshold.
+### Run DFSR_Clear_Conflict_and_Stale_Data_Single_DC Script:
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13;
 iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/DFSR_Clear_Conflict_and_Stale_Data_Single_DC.ps1'))
 
