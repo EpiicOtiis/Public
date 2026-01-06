@@ -9,39 +9,47 @@
     Checks the local system for active Extended Security Update (ESU) licenses.
 
 .DESCRIPTION
-    Queries the SoftwareLicensingProduct class via CIM to find licenses 
-    containing "ESU" with an installed product key. Returns a formatted table 
-    or a "No ESU Active" message if none are found.
+    Queries the SoftwareLicensingProduct class. Includes a "wait" message for the user,
+    handles "No ESU Found" scenarios, and formats long product names so they don't cut off.
 #>
 
-# 1. Capture the results into a variable
+# 1. Display the wait message to the user
+Write-Host "------------------------------------------------------------------" -ForegroundColor Cyan
+Write-Host "Initializing ESU License Check..." -ForegroundColor Cyan
+Write-Host "Note: This process typically takes 1-5 minutes depending on system load." -ForegroundColor Yellow
+Write-Host "------------------------------------------------------------------" -ForegroundColor Cyan
+
+# 2. Capture the results into a variable
+# We filter for names containing ESU and ensure a PartialProductKey exists
 $esuLicenses = Get-CimInstance -ClassName SoftwareLicensingProduct | 
     Where-Object { $_.Name -like "*ESU*" -and $_.PartialProductKey }
 
-# 2. Check if the variable is null or empty
+# 3. Logic to handle "No Return Value"
 if ($null -eq $esuLicenses) {
-    Write-Host "------------------------------------"
-    Write-Host "Result: No ESU Active" -ForegroundColor Yellow
-    Write-Host "------------------------------------"
+    Write-Host ""
+    Write-Host "Result: No ESU Active" -ForegroundColor Red -BackgroundColor Black
+    Write-Host ""
 }
 else {
-    # 3. Format the output for readability
+    Write-Host "`nScan Complete. Results below:`n" -ForegroundColor Green
+
+    # 4. Format the output 
+    # Use -Wrap to ensure long names (like the Education/Enterprise string) are fully visible
     $esuLicenses | Select-Object `
         @{Name="Product Name"; Expression={$_.Name}},
         @{Name="Status"; Expression={
-            # Convert the integer LicenseStatus into a human-readable string
             switch ($_.LicenseStatus) {
                 0 { "Unlicensed" }
                 1 { "Licensed (Active)" }
-                2 { "OOB Grace Period" }
-                3 { "OOT Grace Period" }
-                4 { "Non-Genuine Grace" }
+                2 { "OOB Grace" }
+                3 { "OOT Grace" }
+                4 { "Non-Genuine" }
                 5 { "Notification" }
                 6 { "Extended Grace" }
                 Default { "Unknown" }
             }
         }},
         @{Name="Partial Key"; Expression={$_.PartialProductKey}},
-        Description | 
-    Format-Table -AutoSize
+        @{Name="Description"; Expression={$_.Description}} | 
+    Format-Table -AutoSize -Wrap
 }
