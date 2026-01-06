@@ -54,6 +54,10 @@ irm https://github.com/EpiicOtiis/Public/blob/main/Microsoft%20Windows/General%2
 ### One_Time_Reboot_Scheduler.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1 | iex
 
+### W10_ESU_Checker.PS1
+#### This script will check for the presence of an ESU license on a Windows 10 machine. 
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Licensing/W10_ESU_Checker.ps1 | iex
+
 ### Windows_Update_Toolbox.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Patching/Windows_Update_Toolbox.ps1 | iex
 
