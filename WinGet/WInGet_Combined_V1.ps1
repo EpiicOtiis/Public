@@ -70,8 +70,9 @@ while ($continueActions) {
     Write-Host "`nWhat would you like to do?" -ForegroundColor Yellow
     Write-Host "1. Update Applications" -ForegroundColor White
     Write-Host "2. Uninstall Applications" -ForegroundColor White
-    Write-Host "3. Exit" -ForegroundColor White
-    $UserChoice = Read-Host "Enter your choice (1, 2, or 3)"
+    Write-Host "3. Install Applications" -ForegroundColor White
+    Write-Host "4. Exit" -ForegroundColor White
+    $UserChoice = Read-Host "Enter your choice (1, 2, 3, or 4)"
 
     switch ($UserChoice) {
         "1" {
@@ -142,11 +143,33 @@ while ($continueActions) {
             }
         }
         "3" {
+            # --- Section for Installing Software ---
+            Write-Host "`n--- Installing Winget Package ---" -ForegroundColor Cyan
+            Write-Host "Enter the package ID or Name you wish to install." -ForegroundColor DarkCyan
+
+            # Prompt the user for the package to install
+            $PackageToInstall = Read-Host "Enter the 'Id' or 'Name' of the package you want to install (or press Enter to skip installation)"
+
+            if (-not [string]::IsNullOrWhiteSpace($PackageToInstall)) {
+                Write-Host "Attempting to install '$PackageToInstall'..." -ForegroundColor Yellow
+                Try {
+                    & ".\winget.exe" install "$PackageToInstall" -e --accept-source-agreements -h --disable-interactivity
+                    Write-Host "Successfully initiated install for '$PackageToInstall'." -ForegroundColor Green
+                }
+                Catch {
+                    Write-Host "Failed to install '$PackageToInstall'. Error: $($_.Exception.Message)" -ForegroundColor Red
+                    Write-Host "Ensure the package ID/name is correct and available in Winget." -ForegroundColor Red
+                }
+            } else {
+                Write-Host "No package specified for installation. Skipping installation." -ForegroundColor Yellow
+            }
+        }
+        "4" {
             Write-Host "Exiting script." -ForegroundColor Yellow
             $continueActions = $false # Set to false to break out of the while loop
         }
         Default {
-            Write-Host "Invalid choice. Please enter 1, 2, or 3." -ForegroundColor Red
+            Write-Host "Invalid choice. Please enter 1, 2, 3, or 4." -ForegroundColor Red
         }
     }
 
