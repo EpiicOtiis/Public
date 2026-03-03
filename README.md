@@ -21,6 +21,10 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%2
 ### Get_AD_Domain_Users.ps1 (Exports output to C:\ADUserInfo.csv)
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/Get_AD_Domain_Admins.ps1 | iex
 
+### AD_User_Cleanup_V2.ps1 (Logs to C:\Logs)
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_User_Cleanup_V2.ps1 | iex
+
+
 # Application Scripts
 
 ### Remove-Teams.ps1
