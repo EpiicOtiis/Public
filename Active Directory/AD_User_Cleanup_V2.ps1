@@ -508,8 +508,9 @@ Function Show-UserModuleMenu {
         Write-Host " 1. VIEW: Inactive Users"
         Write-Host " 2. VIEW: Stale Passwords"
         Write-Host " 3. ACTION: Disable & Move"
-        Write-Host " 4. ACTION: Delete Staged Users"
-        Write-Host " 5. ACTION: Find 'test' Users & Remove"
+        Write-Host " 4. ACTION: Disable Only"
+        Write-Host " 5. ACTION: Delete Staged Users"
+        Write-Host " 6. ACTION: Find 'test' Users & Remove"
         Write-MenuFooter -Color Cyan -BackChar "B"
         
         $Choice = (Read-Host "`nSelection").ToUpper()
@@ -558,6 +559,25 @@ Function Show-UserModuleMenu {
                 }
             }
             "4" {
+                # new disable-only path
+                if ($script:ProtectedAccounts.Count -eq 0) { Write-Host "Configure protected accounts first (option 8)." -ForegroundColor Red; Start-Sleep 2; break }
+                $Days = Read-Host "Days of inactivity (e.g. 90)"
+                if (!$Days) { break }
+                $Data = Get-SafeADData "User" | Where-Object { ( $_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days) ) -and $_.IsSystemAccount -eq $false }
+                if (!$Data) { Write-Host "No users match the criteria (inactive for $Days+ days, not system accounts)." -ForegroundColor Yellow; Start-Sleep 2; break }
+                $Sel = $Data | Out-GridView -Title "Select to DISABLE" -PassThru
+                if ($Sel -and (Read-Host "Type 'CONFIRM'").ToUpper() -eq "CONFIRM") {
+                    foreach ($U in $Sel) {
+                        $B = Get-ObjectSnapshot $U.ObjectGUID
+                        try {
+                            if ($U.Status -eq "Enabled") { Disable-ADAccount -Identity $U.ObjectGUID }
+                            $A = Get-ObjectSnapshot $U.ObjectGUID
+                            Write-DetailedAuditLog -Action "USER_DISABLE_ONLY" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $A
+                        } catch { Write-DetailedAuditLog -Action "USER_ERR" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null -FinalResult "ERROR: $($_.Exception.Message)" }
+                    }
+                }
+            }
+            "5" {
                 $Days = Read-Host "Days of inactivity (e.g. 90)"
                 if (!$Days) { break }
                 $Data = Get-SafeADData "User" | Where-Object { $_.DistinguishedName -like "*$script:PendingDeletionOU*" -and $_.Status -eq "Disabled" -and ( $_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days) ) }
@@ -573,7 +593,7 @@ Function Show-UserModuleMenu {
                     }
                 }
             }
-            "5" {
+            "6" {
                 # find any account with "test" in name or username and allow deletion
                 $Matches = Get-SafeADData "User" | Where-Object { $_.Name -like '*test*' -or $_.Username -like '*test*' }
                 if (!$Matches) { Write-Host "No users with 'test' found." -ForegroundColor Yellow; Start-Sleep 2; break }
