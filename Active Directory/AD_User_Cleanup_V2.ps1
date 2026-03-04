@@ -49,6 +49,7 @@ $script:ProtectedAccounts = @()  # Will be populated by user via menu
 
 # Ensure environment
 if (!(Test-Path "C:\Logs")) { New-Item -ItemType Directory -Path "C:\Logs" -Force | Out-Null }
+if (!(Test-Path $ExportDir)) { New-Item -ItemType Directory -Path $ExportDir -Force | Out-Null }
 if (!(Get-Module -ListAvailable ActiveDirectory)) { 
     Write-Error "Active Directory module is required. Please install RSAT."
     return
@@ -71,6 +72,24 @@ Function Write-MenuFooter {
         Write-Host "Q. Quit" -ForegroundColor Gray
     } else {
         Write-Host "$BackChar. Back" -ForegroundColor Gray
+    }
+}
+
+Function Export-DataToCSV {
+    Param([array]$Data, [string]$FileName)
+    if (!$Data -or $Data.Count -eq 0) { return }
+    
+    if ((Read-Host "Export results to CSV? (Y/N)").ToUpper() -eq "Y") {
+        $TimeStamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $FilePath = Join-Path $ExportDir "${FileName}_${TimeStamp}.csv"
+        try {
+            $Data | Export-Csv -Path $FilePath -NoTypeInformation
+            Write-Host "Exported to: $FilePath" -ForegroundColor Green
+            Start-Sleep 1
+        } catch {
+            Write-Host "Error exporting: $($_.Exception.Message)" -ForegroundColor Red
+            Start-Sleep 2
+        }
     }
 }
 
@@ -421,13 +440,23 @@ Function Show-ComputerCleanupMenu {
                 $Days = Read-Host "Days of inactivity (e.g. 90)"
                 if (!$Days) { break }
                 $Results = (Get-SafeADData "Computer") | Where-Object { $_.Role -ne "Workstation" -and ( $_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days) ) }
-                if ($Results) { $Results | Out-GridView } else { Write-Host "No inactive servers found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 }
+                if ($Results) { 
+                    $Results | Out-GridView
+                    Export-DataToCSV -Data $Results -FileName "AD_Servers_Inactive_${Days}Days"
+                } else { 
+                    Write-Host "No inactive servers found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 
+                }
             }
             "2" { 
                 $Days = Read-Host "Days of inactivity (e.g. 90)"
                 if (!$Days) { break }
                 $Results = (Get-SafeADData "Computer") | Where-Object { $_.Role -eq "Workstation" -and ( $_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days) ) }
-                if ($Results) { $Results | Out-GridView } else { Write-Host "No inactive workstations found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 }
+                if ($Results) { 
+                    $Results | Out-GridView
+                    Export-DataToCSV -Data $Results -FileName "AD_Workstations_Inactive_${Days}Days"
+                } else { 
+                    Write-Host "No inactive workstations found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 
+                }
             }
             "3" {
                 if ($script:PendingDeletionOU -eq "NOT SET") { Write-Host "Set Target OU first." -ForegroundColor Red; Start-Sleep 2; break }
@@ -521,11 +550,21 @@ Function Show-UserModuleMenu {
                 $Days = Read-Host "Days of inactivity (e.g. 90)"
                 if (!$Days) { break }
                 $Results = Get-SafeADData "User" | Where-Object { $_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days) }
-                if ($Results) { $Results | Out-GridView } else { Write-Host "No inactive users found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 }
+                if ($Results) { 
+                    $Results | Out-GridView
+                    Export-DataToCSV -Data $Results -FileName "AD_Users_Inactive_${Days}Days"
+                } else { 
+                    Write-Host "No inactive users found (>$Days days)." -ForegroundColor Yellow; Start-Sleep 2 
+                }
             }
             "2" { 
                 $Results = Get-SafeADData "User" | Where-Object { ($_.PasswordExp -lt (Get-Date) -and $_.Status -eq "Enabled") -or ($_.PassNeverExpires -eq $true) }
-                if ($Results) { $Results | Out-GridView } else { Write-Host "No users with stale passwords found." -ForegroundColor Yellow; Start-Sleep 2 }
+                if ($Results) { 
+                    $Results | Out-GridView
+                    Export-DataToCSV -Data $Results -FileName "AD_Users_StalePasswords"
+                } else { 
+                    Write-Host "No users with stale passwords found." -ForegroundColor Yellow; Start-Sleep 2 
+                }
             }
             "3" {
                 if ($script:PendingDeletionOU -eq "NOT SET") { Write-Host "Set Target OU." -ForegroundColor Red; Start-Sleep 2; break }
@@ -733,8 +772,16 @@ do {
     $MainChoice = (Read-Host "`nSelection").ToUpper()
 
     switch ($MainChoice) {
-        "1" { Get-SafeADData "User" | Out-GridView }
-        "2" { Get-SafeADData "Computer" | Out-GridView }
+        "1" { 
+            $Results = Get-SafeADData "User"
+            $Results | Out-GridView
+            Export-DataToCSV -Data $Results -FileName "AD_Users_All"
+        }
+        "2" { 
+            $Results = Get-SafeADData "Computer"
+            $Results | Out-GridView
+            Export-DataToCSV -Data $Results -FileName "AD_Computers_All"
+        }
         "3" { Show-UserModuleMenu }
         "4" { Show-ComputerCleanupMenu }
         "5" { Show-BitLockerMenu }
