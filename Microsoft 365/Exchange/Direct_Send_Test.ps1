@@ -27,7 +27,7 @@ function Test-SMTPConnectivity {
     
     Write-Host "`nTesting network connectivity to $SMTPServer on port $Port..." -ForegroundColor Yellow
     $result = Test-NetConnection -ComputerName $SMTPServer -Port $Port
-    $result  # Display full Test-NetConnection output
+    $result | Format-List  # Display full Test-NetConnection output in list format
     
     if ($result.TcpTestSucceeded) {
         Write-Host "Success: Network connection to $SMTPServer`:$Port is available" -ForegroundColor Green
