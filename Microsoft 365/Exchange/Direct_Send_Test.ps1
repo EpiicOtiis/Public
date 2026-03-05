@@ -18,6 +18,24 @@
     Runs the script and prompts for all required parameters interactively
 #>
 
+# --- Function to Test Network Connectivity ---
+function Test-SMTPConnectivity {
+    param(
+        [string]$SMTPServer,
+        [string]$Port
+    )
+    
+    Write-Host "`nTesting network connectivity to $SMTPServer on port $Port..." -ForegroundColor Yellow
+    $result = Test-NetConnection -ComputerName $SMTPServer -Port $Port
+    
+    if ($result.TcpTestSucceeded) {
+        Write-Host "Success: Network connection to $SMTPServer`:$Port is available" -ForegroundColor Green
+    }
+    else {
+        Write-Host "Failed: Cannot reach $SMTPServer on port $Port. Check firewall rules and network connectivity." -ForegroundColor Red
+    }
+}
+
 # --- Configuration ---
 $SMTPServer = Read-Host "Enter SMTP Server (e.g., yourdomain-com.mail.protection.outlook.com)"
 $Port = Read-Host "Enter Port number (default: 25)"
@@ -39,4 +57,5 @@ try {
 }
 catch {
     Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Test-SMTPConnectivity -SMTPServer $SMTPServer -Port $Port
 } 
