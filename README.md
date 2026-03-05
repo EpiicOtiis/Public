@@ -72,13 +72,10 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 ### VMWare_Tools_Updater.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/VMWare/VMWare_Tools_Updater.ps1 | iex
 
-<!-- 
-
 # Microsoft 365
 
 ## Exchange
-
--->
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Exchange/Direct_Send_Test.ps1 | iex
 
 # Notes:
 Originally I used the traditional Invoke-Expression method of downloading and executing scripts. While there is no firm date on removal of this method, it is depreciated and Microsoft recommends alternative's such as Invoke-WebRequest like this:
