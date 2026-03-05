@@ -75,6 +75,8 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/VMWare/V
 # Microsoft 365
 
 ## Exchange
+
+### Direct_Send_Test.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Exchange/Direct_Send_Test.ps1 | iex
 
 # Notes:
