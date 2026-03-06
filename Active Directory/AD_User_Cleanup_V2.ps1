@@ -539,7 +539,8 @@ Function Show-UserModuleMenu {
         Write-Host " 3. ACTION: Disable & Move"
         Write-Host " 4. ACTION: Disable Only"
         Write-Host " 5. ACTION: Delete Staged Users"
-        Write-Host " 6. ACTION: Find 'test' Users & Remove"
+        Write-Host " 6. ACTION: Find 'test' Users & Disable"
+        Write-Host " 7. ACTION: Find 'temp' Users & Disable"
         Write-MenuFooter -Color Cyan -BackChar "B"
         
         $Choice = (Read-Host "`nSelection").ToUpper()
@@ -633,16 +634,33 @@ Function Show-UserModuleMenu {
                 }
             }
             "6" {
-                # find any account with "test" in name or username and allow deletion
+                # find any account with "test" in name or username and allow disabling
                 $Matches = Get-SafeADData "User" | Where-Object { $_.Name -like '*test*' -or $_.Username -like '*test*' }
                 if (!$Matches) { Write-Host "No users with 'test' found." -ForegroundColor Yellow; Start-Sleep 2; break }
-                $Sel = $Matches | Out-GridView -Title "Select 'test' users to DELETE" -PassThru
-                if ($Sel -and (Read-Host "Type 'DELETE'").ToUpper() -eq "DELETE") {
+                $Sel = $Matches | Out-GridView -Title "Select 'test' users to DISABLE" -PassThru
+                if ($Sel -and (Read-Host "Type 'CONFIRM'").ToUpper() -eq "CONFIRM") {
                     foreach ($U in $Sel) {
                         $B = Get-ObjectSnapshot $U.ObjectGUID
                         try {
-                            Remove-ADUser -Identity $U.ObjectGUID -Confirm:$false
-                            Write-DetailedAuditLog -Action "USER_DEL_TEST" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null
+                            if ($U.Status -eq "Enabled") { Disable-ADAccount -Identity $U.ObjectGUID }
+                            $A = Get-ObjectSnapshot $U.ObjectGUID
+                            Write-DetailedAuditLog -Action "USER_DISABLE_TEST" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $A
+                        } catch { Write-DetailedAuditLog -Action "USER_ERR" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null -FinalResult "ERROR: $($_.Exception.Message)" }
+                    }
+                }
+            }
+            "7" {
+                # find any account with "temp" in name or username and allow disabling
+                $Matches = Get-SafeADData "User" | Where-Object { $_.Name -like '*temp*' -or $_.Username -like '*temp*' }
+                if (!$Matches) { Write-Host "No users with 'temp' found." -ForegroundColor Yellow; Start-Sleep 2; break }
+                $Sel = $Matches | Out-GridView -Title "Select 'temp' users to DISABLE" -PassThru
+                if ($Sel -and (Read-Host "Type 'CONFIRM'").ToUpper() -eq "CONFIRM") {
+                    foreach ($U in $Sel) {
+                        $B = Get-ObjectSnapshot $U.ObjectGUID
+                        try {
+                            if ($U.Status -eq "Enabled") { Disable-ADAccount -Identity $U.ObjectGUID }
+                            $A = Get-ObjectSnapshot $U.ObjectGUID
+                            Write-DetailedAuditLog -Action "USER_DISABLE_TEMP" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $A
                         } catch { Write-DetailedAuditLog -Action "USER_ERR" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null -FinalResult "ERROR: $($_.Exception.Message)" }
                     }
                 }
