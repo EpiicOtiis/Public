@@ -541,6 +541,7 @@ Function Show-UserModuleMenu {
         Write-Host " 5. ACTION: Delete Staged Users"
         Write-Host " 6. ACTION: Find 'test' Users & Disable"
         Write-Host " 7. ACTION: Find 'temp' Users & Disable"
+        Write-Host " 8. ACTION: Find & Disable Stale Admins"
         Write-MenuFooter -Color Cyan -BackChar "B"
         
         $Choice = (Read-Host "`nSelection").ToUpper()
@@ -661,6 +662,79 @@ Function Show-UserModuleMenu {
                             if ($U.Status -eq "Enabled") { Disable-ADAccount -Identity $U.ObjectGUID }
                             $A = Get-ObjectSnapshot $U.ObjectGUID
                             Write-DetailedAuditLog -Action "USER_DISABLE_TEMP" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $A
+                        } catch { Write-DetailedAuditLog -Action "USER_ERR" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null -FinalResult "ERROR: $($_.Exception.Message)" }
+                    }
+                }
+            }
+            "8" {
+                # Find and disable stale admin users (excluding protected accounts and service accounts)
+                if ($script:ProtectedAccounts.Count -eq 0) { Write-Host "Configure protected accounts first (option 8 in main menu)." -ForegroundColor Red; Start-Sleep 2; break }
+                
+                Write-Host "Gathering admin group memberships (including nested)..." -ForegroundColor Cyan
+                
+                # Get all admin group members recursively
+                $AdminGroups = @("Domain Admins", "Enterprise Admins", "Administrators")
+                $AdminUserGUIDs = @()
+                
+                foreach ($GroupName in $AdminGroups) {
+                    try {
+                        $GroupObj = Get-ADGroup -Filter "Name -eq '$GroupName'" -ErrorAction Stop
+                        $Members = Get-ADGroupMember -Identity $GroupObj.ObjectGUID -Recursive -ErrorAction Stop | Where-Object { $_.objectClass -eq "user" }
+                        $AdminUserGUIDs += $Members.ObjectGUID
+                    } catch {
+                        # Group may not exist (e.g., Enterprise Admins in single-domain forests)
+                    }
+                }
+                
+                $AdminUserGUIDs = @($AdminUserGUIDs | Sort-Object -Unique)
+                
+                if ($AdminUserGUIDs.Count -eq 0) { Write-Host "No admin users found." -ForegroundColor Yellow; Start-Sleep 2; break }
+                
+                $Days = Read-Host "Days of inactivity to check (e.g. 90)"
+                if (!$Days) { break }
+                
+                $Now = Get-Date
+                $AdminUsers = Get-SafeADData "User" | Where-Object { $_.ObjectGUID -in $AdminUserGUIDs }
+                
+                # Filter: inactive + not protected + not system account
+                $Candidates = $AdminUsers | Where-Object {
+                    ($_.LastLogon -eq $null -or $_.LastLogon -lt $Now.AddDays(-[int]$Days)) -and
+                    $_.IsSystemAccount -eq $false -and
+                    $_.Name -notin $script:ProtectedAccounts -and
+                    $_.Username -notin $script:ProtectedAccounts
+                }
+                
+                if (!$Candidates -or $Candidates.Count -eq 0) { 
+                    Write-Host "No stale admin users found (excluding protected accounts and system accounts)." -ForegroundColor Yellow; Start-Sleep 2; break 
+                }
+                
+                # Filter out service accounts (those with SPNs)
+                $DataFiltered = $Candidates | ForEach-Object {
+                    $User = $_
+                    try {
+                        $ADUserObj = Get-ADUser -Identity $User.ObjectGUID -Properties ServicePrincipalName -ErrorAction Stop
+                        if (-not $ADUserObj.ServicePrincipalName -or $ADUserObj.ServicePrincipalName.Count -eq 0) {
+                            # No SPN - safe to include
+                            $User
+                        }
+                        # else: Has SPN - service account, skip it
+                    } catch {
+                        $User  # Include if error checking SPN
+                    }
+                }
+                
+                if (!$DataFiltered -or $DataFiltered.Count -eq 0) { 
+                    Write-Host "No stale admin users found (all candidates are service accounts or protected)." -ForegroundColor Yellow; Start-Sleep 2; break 
+                }
+                
+                $Sel = $DataFiltered | Out-GridView -Title "Select Stale Admins to DISABLE" -PassThru
+                if ($Sel -and (Read-Host "Type 'CONFIRM'").ToUpper() -eq "CONFIRM") {
+                    foreach ($U in $Sel) {
+                        $B = Get-ObjectSnapshot $U.ObjectGUID
+                        try {
+                            if ($U.Status -eq "Enabled") { Disable-ADAccount -Identity $U.ObjectGUID }
+                            $A = Get-ObjectSnapshot $U.ObjectGUID
+                            Write-DetailedAuditLog -Action "USER_DISABLE_STALE_ADMIN" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $A
                         } catch { Write-DetailedAuditLog -Action "USER_ERR" -Name $U.Name -Username $U.Username -BeforeState $B -AfterState $null -FinalResult "ERROR: $($_.Exception.Message)" }
                     }
                 }
