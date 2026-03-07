@@ -53,7 +53,7 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Folder-Permissions-Scanner_V3.ps1 | iex
 
 ### Time_Sync_Repair.ps1
-irm https://github.com/EpiicOtiis/Public/blob/main/Microsoft%20Windows/General%20Troubleshooting/Time_Sync_Repair.ps1 | iex
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/Time_Sync_Repair.ps1 | iex
 
 ### One_Time_Reboot_Scheduler.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1 | iex
