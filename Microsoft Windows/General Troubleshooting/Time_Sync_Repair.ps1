@@ -16,9 +16,11 @@ if (-not $isAdmin) {
     exit
 }
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "  Domain and Time Sync Configuration" -ForegroundColor Cyan
-Write-Host "========================================`n" -ForegroundColor Cyan
+$restart = $true
+do {
+    Write-Host "`n========================================" -ForegroundColor Cyan
+    Write-Host "  Domain and Time Sync Configuration" -ForegroundColor Cyan
+    Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Check if computer is domain joined
 Write-Host "Checking domain membership..." -ForegroundColor Yellow
@@ -47,6 +49,13 @@ if ($isDomainJoined) {
     Write-Host "Computer is NOT domain joined (Workgroup)" -ForegroundColor Yellow
     Write-Host "Workgroup: $($computerSystem.Workgroup)" -ForegroundColor White
 }
+
+# Show current time zone
+Write-Host "`n[TIME ZONE]" -ForegroundColor Cyan
+$currentTimeZone = Get-TimeZone
+Write-Host "Current Time Zone: $($currentTimeZone.DisplayName)" -ForegroundColor White
+Write-Host "Time Zone ID: $($currentTimeZone.Id)" -ForegroundColor White
+Write-Host "UTC Offset: $($currentTimeZone.BaseUtcOffset)" -ForegroundColor White
 
 # Check Group Policy Time Settings
 Write-Host "`n[GROUP POLICY TIME SETTINGS]" -ForegroundColor Cyan
@@ -324,11 +333,22 @@ if ($choice -eq '1') {
 } elseif ($choice -eq '4') {
     # Exit
     Write-Host "`nExiting without making changes..." -ForegroundColor Yellow
+    $restart = $false
 } else {
     Write-Host "`nInvalid choice. Exiting..." -ForegroundColor Red
+    $restart = $false
 }
 
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "Script completed. Press any key to exit." -ForegroundColor Cyan
-Write-Host "========================================`n" -ForegroundColor Cyan
-pause
+    Write-Host "`n========================================" -ForegroundColor Cyan
+    Write-Host "Script completed." -ForegroundColor Cyan
+    Write-Host "========================================`n" -ForegroundColor Cyan
+    
+    $restartChoice = Read-Host "Do you want to run the script again? (Y/N)"
+    if ($restartChoice -eq 'Y' -or $restartChoice -eq 'y') {
+        $restart = $true
+        Clear-Host
+    } else {
+        $restart = $false
+    }
+
+} while ($restart)
