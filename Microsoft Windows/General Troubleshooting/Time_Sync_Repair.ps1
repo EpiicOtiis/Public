@@ -123,8 +123,9 @@ Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "What would you like to do?" -ForegroundColor Yellow
 Write-Host "1. Change time sync settings" -ForegroundColor White
 Write-Host "2. Force sync with current settings" -ForegroundColor White
-Write-Host "3. Exit" -ForegroundColor White
-$choice = Read-Host "Enter choice (1, 2, or 3)"
+Write-Host "3. Set time zone" -ForegroundColor White
+Write-Host "4. Exit" -ForegroundColor White
+$choice = Read-Host "Enter choice (1, 2, 3, or 4)"
 
 if ($choice -eq '1') {
     # Change time sync settings
@@ -256,6 +257,71 @@ if ($choice -eq '1') {
     Write-Host "Current Source: $currentTimeSource" -ForegroundColor White
     
 } elseif ($choice -eq '3') {
+    # Set time zone
+    Write-Host "`n[TIME ZONE SETTINGS]" -ForegroundColor Cyan
+    
+    # Show current time zone
+    $currentTZ = Get-TimeZone
+    Write-Host "Current Time Zone: $($currentTZ.DisplayName)" -ForegroundColor White
+    Write-Host "Time Zone ID: $($currentTZ.Id)" -ForegroundColor White
+    
+    Write-Host "`nSelect time zone:" -ForegroundColor Yellow
+    Write-Host "1. Eastern Time (EST/EDT)" -ForegroundColor White
+    Write-Host "2. Central Time (CST/CDT)" -ForegroundColor White
+    Write-Host "3. Mountain Time (MST/MDT)" -ForegroundColor White
+    Write-Host "4. Pacific Time (PST/PDT)" -ForegroundColor White
+    Write-Host "5. Alaska Time (AKST/AKDT)" -ForegroundColor White
+    Write-Host "6. Hawaii-Aleutian Time (HST/HDT)" -ForegroundColor White
+    Write-Host "7. Specify time zone manually" -ForegroundColor White
+    Write-Host "8. Cancel" -ForegroundColor White
+    
+    $tzChoice = Read-Host "Enter choice (1-8)"
+    
+    $timeZoneId = $null
+    
+    switch ($tzChoice) {
+        '1' { $timeZoneId = "Eastern Standard Time" }
+        '2' { $timeZoneId = "Central Standard Time" }
+        '3' { $timeZoneId = "Mountain Standard Time" }
+        '4' { $timeZoneId = "Pacific Standard Time" }
+        '5' { $timeZoneId = "Alaskan Standard Time" }
+        '6' { $timeZoneId = "Hawaiian Standard Time" }
+        '7' { 
+            Write-Host "`nAvailable time zones:" -ForegroundColor Yellow
+            Get-TimeZone | Select-Object Id, DisplayName | Format-Table -AutoSize
+            $manualTZ = Read-Host "Enter the Time Zone ID from the list above"
+            if ($manualTZ) {
+                $timeZoneId = $manualTZ
+            }
+        }
+        '8' { 
+            Write-Host "Time zone change cancelled." -ForegroundColor Yellow
+            $timeZoneId = $null
+        }
+        default {
+            Write-Host "Invalid choice. Time zone change cancelled." -ForegroundColor Red
+            $timeZoneId = $null
+        }
+    }
+    
+    if ($timeZoneId) {
+        try {
+            Set-TimeZone -Id $timeZoneId
+            $newTZ = Get-TimeZone
+            Write-Host "`nTime zone successfully changed to: $($newTZ.DisplayName)" -ForegroundColor Green
+            Write-Host "New Time Zone ID: $($newTZ.Id)" -ForegroundColor White
+            
+            # Force time sync after time zone change
+            Write-Host "`nForcing time synchronization after time zone change..." -ForegroundColor Yellow
+            $resync = w32tm /resync /rediscover 2>&1
+            Write-Host $resync -ForegroundColor White
+            
+        } catch {
+            Write-Host "`nError setting time zone: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+    
+} elseif ($choice -eq '4') {
     # Exit
     Write-Host "`nExiting without making changes..." -ForegroundColor Yellow
 } else {
