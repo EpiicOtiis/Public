@@ -118,28 +118,32 @@ try {
     # Silent catch
 }
 
-# Prompt to change settings
+# Prompt for action
 Write-Host "`n========================================" -ForegroundColor Cyan
-$change = Read-Host "Do you want to change time sync settings? (Y/N)"
+Write-Host "What would you like to do?" -ForegroundColor Yellow
+Write-Host "1. Change time sync settings" -ForegroundColor White
+Write-Host "2. Force sync with current settings" -ForegroundColor White
+Write-Host "3. Exit" -ForegroundColor White
+$choice = Read-Host "Enter choice (1, 2, or 3)"
 
-if ($change -eq 'Y' -or $change -eq 'y') {
+if ($choice -eq '1') {
+    # Change time sync settings
     Write-Host "`nSelect time source:" -ForegroundColor Yellow
     
     if ($isDomainJoined) {
         Write-Host "1. Use Domain Hierarchy (Group Policy/NT5DS)" -ForegroundColor White
         Write-Host "2. Specific Domain Controller (Manual NTP)" -ForegroundColor White
         Write-Host "3. Internet Time Server" -ForegroundColor White
-        $choice = Read-Host "Enter choice (1, 2, or 3)"
+        $subChoice = Read-Host "Enter choice (1, 2, or 3)"
     } else {
         Write-Host "1. Specific Domain Controller (Manual NTP)" -ForegroundColor White
         Write-Host "2. Internet Time Server" -ForegroundColor White
-        $choice = Read-Host "Enter choice (1 or 2)"
+        $subChoice = Read-Host "Enter choice (1 or 2)"
         # Adjust choice for workgroup computers
-        if ($choice -eq '1') { $choice = '2' }
-        elseif ($choice -eq '2') { $choice = '3' }
+        if ($subChoice -eq '1') { $subChoice = '2' }
+        elseif ($subChoice -eq '2') { $subChoice = '3' }
     }
-    
-    if ($choice -eq '1') {
+    if ($subChoice -eq '1') {
         # Domain Hierarchy / Group Policy option
         Write-Host "`nConfiguring time sync to use Domain Hierarchy (NT5DS)..." -ForegroundColor Yellow
         Write-Host "This will sync with the domain controller according to domain policy" -ForegroundColor White
@@ -161,7 +165,7 @@ if ($change -eq 'Y' -or $change -eq 'y') {
         
         Write-Host "Configuration completed - Using domain hierarchy." -ForegroundColor Green
         
-    } elseif ($choice -eq '2') {
+    } elseif ($subChoice -eq '2') {
         # Specific Domain Controller option
         $dc = Read-Host "`nEnter Domain Controller name or IP address"
         
@@ -178,7 +182,7 @@ if ($change -eq 'Y' -or $change -eq 'y') {
         
         Write-Host "Configuration completed." -ForegroundColor Green
         
-    } elseif ($choice -eq '3') {
+    } elseif ($subChoice -eq '3') {
         # Internet time option
         Write-Host "`nConfiguring time sync with Internet time servers..." -ForegroundColor Yellow
         
@@ -202,7 +206,7 @@ if ($change -eq 'Y' -or $change -eq 'y') {
         exit
     }
     
-    # Perform time resync
+    # Perform time resync after configuration changes
     Write-Host "`n[RESYNCING TIME]" -ForegroundColor Cyan
     Write-Host "Forcing time resynchronization..." -ForegroundColor Yellow
     
@@ -226,8 +230,36 @@ if ($change -eq 'Y' -or $change -eq 'y') {
     $newTimeSource = w32tm /query /source 2>&1
     Write-Host "Current Source: $newTimeSource" -ForegroundColor White
     
+} elseif ($choice -eq '2') {
+    # Force sync with current settings
+    Write-Host "`n[FORCING TIME SYNC]" -ForegroundColor Cyan
+    Write-Host "Forcing time resynchronization with current settings..." -ForegroundColor Yellow
+    
+    $resync = w32tm /resync /rediscover 2>&1
+    Write-Host $resync -ForegroundColor White
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "`nTime resync completed successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "`nTime resync command executed. Check output above for any errors." -ForegroundColor Yellow
+    }
+    
+    # Show current status after sync
+    Write-Host "`n[CURRENT TIME STATUS]" -ForegroundColor Cyan
+    Start-Sleep -Seconds 2
+    $currentStatus = w32tm /query /status 2>&1
+    Write-Host $currentStatus -ForegroundColor White
+    
+    # Show current time source
+    Write-Host "`n[CURRENT TIME SOURCE]" -ForegroundColor Cyan
+    $currentTimeSource = w32tm /query /source 2>&1
+    Write-Host "Current Source: $currentTimeSource" -ForegroundColor White
+    
+} elseif ($choice -eq '3') {
+    # Exit
+    Write-Host "`nExiting without making changes..." -ForegroundColor Yellow
 } else {
-    Write-Host "`nNo changes made. Exiting..." -ForegroundColor Yellow
+    Write-Host "`nInvalid choice. Exiting..." -ForegroundColor Red
 }
 
 Write-Host "`n========================================" -ForegroundColor Cyan
