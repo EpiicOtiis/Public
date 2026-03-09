@@ -40,12 +40,17 @@ function CheckSpoolerStatus {
     Write-Host "Start Type: $($spooler.StartType)"
 
     Write-Host "`nPrint Jobs in Queue:"
-    $jobs = Get-Printer | ForEach-Object { Get-PrintJob -PrinterName $_.Name }
-    if ($jobs) {
-        $jobs | Select-Object Name, Document, JobStatus, SubmittedTime | Format-Table -AutoSize
-        Write-Host "Total jobs in queue: $($jobs.Count)"
-    } else {
-        Write-Host "No print jobs in the queue."
+    try {
+        $jobs = Get-Printer | ForEach-Object { Get-PrintJob -PrinterName $_.Name }
+        if ($jobs) {
+            $jobs | Select-Object Name, Document, JobStatus, SubmittedTime | Format-Table -AutoSize
+            Write-Host "Total jobs in queue: $($jobs.Count)"
+        } else {
+            Write-Host "No print jobs in the queue."
+        }
+    } catch {
+        Write-Host "Unable to retrieve print jobs. Error: $($_.Exception.Message)"
+        Write-Host "Note: Retrieving print jobs may require administrative privileges or the Print Spooler service to be running."
     }
 }
 
