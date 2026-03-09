@@ -59,7 +59,7 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1 | iex
 
 ### Print_Repair.ps1
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/Time_Sync_Repair.ps1 | iex
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/Printer_Repair.ps1 | iex
 
 ### W10_ESU_Checker.PS1
 #### This script will check for the presence of an ESU license on a Windows 10 machine. 
