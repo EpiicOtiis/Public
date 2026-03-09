@@ -40,7 +40,7 @@ function CheckSpoolerStatus {
     Write-Host "Start Type: $($spooler.StartType)"
 
     Write-Host "`nPrint Jobs in Queue:"
-    $jobs = Get-PrintJob
+    $jobs = Get-Printer | ForEach-Object { Get-PrintJob -PrinterName $_.Name }
     if ($jobs) {
         $jobs | Select-Object Name, Document, JobStatus, SubmittedTime | Format-Table -AutoSize
         Write-Host "Total jobs in queue: $($jobs.Count)"
