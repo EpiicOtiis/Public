@@ -31,31 +31,45 @@ function ListPrinters {
     Get-Printer | Select-Object Name, PortName, DriverName | Format-Table -AutoSize
 }
 
-function ExportPrinters {
-    Write-Host "Exporting printer list to C:\Printers.csv..."
-    Get-Printer | Select-Object Name, PortName, DriverName | Export-Csv C:\Printers.csv -NoTypeInformation
-    Write-Host "Export complete."
+function CheckSpoolerStatus {
+    Write-Host "`nPrint Spooler Service Status:"
+    $spooler = Get-Service Spooler
+    Write-Host "Service Name: $($spooler.Name)"
+    Write-Host "Display Name: $($spooler.DisplayName)"
+    Write-Host "Status: $($spooler.Status)"
+    Write-Host "Start Type: $($spooler.StartType)"
+
+    Write-Host "`nPrint Jobs in Queue:"
+    $jobs = Get-PrintJob
+    if ($jobs) {
+        $jobs | Select-Object Name, Document, JobStatus, SubmittedTime | Format-Table -AutoSize
+        Write-Host "Total jobs in queue: $($jobs.Count)"
+    } else {
+        Write-Host "No print jobs in the queue."
+    }
 }
 
 do {
     Write-Host "`nMenu:"
-    Write-Host "1. Restart Print Spooler Service"
-    Write-Host "2. Clean up Print Spooler Queue"
-    Write-Host "3. List Installed Printers to Screen"
-    Write-Host "4. Export Installed Printers to CSV"
-    Write-Host "5. Exit"
-    $choice = Read-Host "Enter your choice (1-5)"
+    Write-Host "1. Check Print Spooler Status and Queue"
+    Write-Host "2. Restart Print Spooler Service"
+    Write-Host "3. Clean up Print Spooler Queue"
+    Write-Host "4. List Installed Printers to Screen"
+    Write-Host "5. Export Installed Printers to CSV"
+    Write-Host "6. Exit"
+    $choice = Read-Host "Enter your choice (1-6)"
 
     switch ($choice) {
-        1 { RestartSpooler }
-        2 { CleanSpooler }
-        3 { ListPrinters }
-        4 { ExportPrinters }
-        5 { break }
+        1 { CheckSpoolerStatus }
+        2 { RestartSpooler }
+        3 { CleanSpooler }
+        4 { ListPrinters }
+        5 { ExportPrinters }
+        6 { break }
         default { Write-Host "Invalid choice. Please try again." }
     }
 
-    if ($choice -ne 5) {
+    if ($choice -ne 6) {
         $again = Read-Host "Do you want to perform another action? (y/n)"
         if ($again -ne 'y') { break }
     }
