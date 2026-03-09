@@ -82,7 +82,7 @@ do {
     Write-Host "==============================" -ForegroundColor Magenta
     Write-Host "1. Check Print Spooler Status and Queue"
     Write-Host "2. Restart Print Spooler Service"
-    Write-Host "3. Clean up (Nuke) Print Spooler Queue"
+    Write-Host "3. Clean up Print Spooler Queue"
     Write-Host "4. List Installed Printers to Screen"
     Write-Host "5. Export Installed Printers to CSV (Desktop)"
     Write-Host "6. Exit"
