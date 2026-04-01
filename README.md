@@ -44,6 +44,9 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/W
 ### Get-Drive-Info.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Get-Drive-Info.ps1 | iex
 
+### Share_Report.ps1
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Share_Report.ps1 | iex
+
 ### Folder-Permissions-Scanner.ps1
 #### This version will not include folder owner in the output
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Folder-Permissions-Scanner.ps1 | iex
