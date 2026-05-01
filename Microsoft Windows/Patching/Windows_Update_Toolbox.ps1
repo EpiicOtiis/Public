@@ -224,7 +224,8 @@ function Start-DismScan {
 }
 
 function Reset-RegistryKeys {
-    Write-Host "This function is advanced and will modify the registry." -ForegroundColor Yellow
+    Write-Host "This will remove Windows Update-related registry keys and values from HKCU and HKLM." -ForegroundColor Yellow
+    Write-Host "It affects Windows Update policy and configuration entries only." -ForegroundColor Yellow
     $confirmation = Read-Host "Are you sure you want to proceed? (y/n)"
     if ($confirmation -ne 'y') {
         Write-Host "Operation cancelled." -ForegroundColor Red
