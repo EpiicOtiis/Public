@@ -181,13 +181,13 @@ function Start-DiskCheck {
 function Show-ChkdskResults {
     Write-Host "Querying recent CHKDSK results from the Application event log..." -ForegroundColor Cyan
     $countInput = Read-Host "How many recent CHKDSK results do you want to display? Press Enter for the most recent run"
+    $count = 1
 
-    if ([string]::IsNullOrWhiteSpace($countInput)) {
-        $count = 1
-    }
-    elseif (-not [int]::TryParse($countInput, [ref]$count) -or $count -lt 1) {
-        Write-Warning "Invalid number provided. Defaulting to the most recent run."
-        $count = 1
+    if (-not [string]::IsNullOrWhiteSpace($countInput)) {
+        if (-not [int]::TryParse($countInput, [ref]$count) -or $count -lt 1) {
+            Write-Warning "Invalid number provided. Defaulting to the most recent run."
+            $count = 1
+        }
     }
 
     $events = Get-WinEvent -LogName "Application" -FilterXPath '*[System[(EventID=1001 or EventID=26214)]]' |
@@ -197,6 +197,9 @@ function Show-ChkdskResults {
 
     if ($events) {
         $events | Format-List
+        if ($events.Count -lt $count) {
+            Write-Host "Only $($events.Count) CHKDSK result(s) were found, which is fewer than the requested $count." -ForegroundColor Yellow
+        }
     } else {
         Write-Host "No recent CHKDSK results found in the Application event log." -ForegroundColor Yellow
     }
