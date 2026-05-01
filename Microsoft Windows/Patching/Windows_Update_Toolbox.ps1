@@ -82,6 +82,7 @@ function Show-MainMenu {
     Write-Host "    8. Perform Repair Operations Automatically (DISM RestoreHealth)"
     Write-Host "    9. Run System File Checker (SFC)"
     Write-Host "   21. Query recent CHKDSK results"
+    Write-Host "   22. Check Windows drive dirty bit"
     Write-Host
     Write-Host "--- Network & Policy ---" -ForegroundColor Yellow
     Write-Host "    4. Open Internet Options"
@@ -207,6 +208,29 @@ function Show-ChkdskResults {
         }
     } else {
         Write-Host "No recent CHKDSK results found in the Application event log." -ForegroundColor Yellow
+    }
+}
+
+function Test-DriveDirtyBit {
+    $systemDrive = $env:SystemDrive.TrimEnd('\')
+    $driveLetter = $systemDrive.Substring(0,2)
+    Write-Host "Checking whether $driveLetter is marked dirty..." -ForegroundColor Cyan
+
+    try {
+        $result = fsutil dirty query $driveLetter 2>&1
+        if ($result -match '(?i)is dirty') {
+            Write-Host "$driveLetter is marked dirty. CHKDSK is likely required and may run at next boot if configured." -ForegroundColor Yellow
+        }
+        elseif ($result -match '(?i)is not dirty') {
+            Write-Host "$driveLetter is not marked dirty." -ForegroundColor Green
+        }
+        else {
+            Write-Host "Unable to determine dirty bit status for $driveLetter." -ForegroundColor Yellow
+            Write-Host $result
+        }
+    }
+    catch {
+        Write-Error "Failed to query dirty bit on $driveLetter. $_"
     }
 }
 
@@ -458,6 +482,7 @@ do {
         "19" { Restart-Computer-Immediate }
         "20" { Schedule-OneTimeReboot }
         "21" { Show-ChkdskResults }
+        "22" { Test-DriveDirtyBit }
         "q"  { Write-Host "Exiting script." }
         default { Write-Warning "Invalid option. Please try again." }
     }
