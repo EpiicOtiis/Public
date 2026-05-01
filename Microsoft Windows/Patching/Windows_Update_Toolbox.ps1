@@ -93,6 +93,7 @@ function Show-MainMenu {
     Write-Host "   18. Explore Other Online Solutions"
     Write-Host "   19. Restart Your PC (Immediate)"
     Write-Host "   20. Schedule a One-Time Reboot"
+    Write-Host "   21. Query recent CHKDSK results"
     Write-Host
     Write-Host "    q. Quit"
     Write-Host
@@ -175,6 +176,30 @@ function Start-DiskCheck {
     Write-Host "This will open a new window to run CHKDSK." -ForegroundColor Yellow
     Write-Host "CHKDSK with /f requires a reboot. You will be prompted in the new window." -ForegroundColor Yellow
     Start-Process cmd.exe -ArgumentList "/c chkdsk $env:SystemDrive /f /r & pause" -Verb RunAs
+}
+
+function Show-ChkdskResults {
+    Write-Host "Querying recent CHKDSK results from the Application event log..." -ForegroundColor Cyan
+    $countInput = Read-Host "How many recent CHKDSK results do you want to display? Press Enter for the most recent run"
+
+    if ([string]::IsNullOrWhiteSpace($countInput)) {
+        $count = 1
+    }
+    elseif (-not [int]::TryParse($countInput, [ref]$count) -or $count -lt 1) {
+        Write-Warning "Invalid number provided. Defaulting to the most recent run."
+        $count = 1
+    }
+
+    $events = Get-WinEvent -LogName "Application" -FilterXPath '*[System[(EventID=1001 or EventID=26214)]]' |
+        Where-Object { $_.Message -like "*Chkdsk*" } |
+        Sort-Object TimeCreated -Descending |
+        Select-Object -First $count
+
+    if ($events) {
+        $events | Format-List
+    } else {
+        Write-Host "No recent CHKDSK results found in the Application event log." -ForegroundColor Yellow
+    }
 }
 
 function Start-SFCScan {
@@ -385,6 +410,7 @@ do {
         "18" { Show-OnlineHelp }
         "19" { Restart-Computer-Immediate }
         "20" { Schedule-OneTimeReboot }
+        "21" { Show-ChkdskResults }
         "q"  { Write-Host "Exiting script." }
         default { Write-Warning "Invalid option. Please try again." }
     }
