@@ -86,7 +86,7 @@ function Show-MainMenu {
     Write-Host "   11. Delete Incorrect Registry Values"
     Write-Host "   12. Repair/Reset Winsock Settings"
     Write-Host "   13. Force Group Policy Update"
-    Write-Host "   14. Manage Windows Updates (PSWindowsUpdate)"
+    Write-Host "   14. Manage Windows Updates"
     Write-Host "   15. Reset the Windows Store"
     Write-Host "   16. Find the Windows Product Key"
     Write-Host "   17. Explore Other Local Solutions (Troubleshooting)"
@@ -260,6 +260,24 @@ function Force-GPUpdate {
 }
 
 function Manage-WindowsUpdates {
+    do {
+        Clear-Host
+        Write-Host "--- Manage Windows Updates ---" -ForegroundColor Green
+        Write-Host "1. PowerShell (PSWindowsUpdate)"
+        Write-Host "2. GUI (WUAManager)"
+        Write-Host "q. Return to main menu"
+        $choice = Read-Host "Select an option"
+
+        switch ($choice) {
+            "1" { Manage-WindowsUpdatesPowerShell }
+            "2" { Run-WUAManager }
+            "q" { break }
+            default { Write-Warning "Invalid option. Please try again." }
+        }
+    } while ($choice -ne 'q')
+}
+
+function Manage-WindowsUpdatesPowerShell {
     # Check for the PSWindowsUpdate module
     if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
         Write-Host "The PSWindowsUpdate module is not installed." -ForegroundColor Yellow
@@ -320,6 +338,26 @@ function Manage-WindowsUpdates {
             }
         }
     } while ($choice -ne 'q')
+}
+
+function Run-WUAManager {
+    Write-Host "Downloading and launching WUAManager..." -ForegroundColor Cyan
+    $downloadUrl = "https://github.com/Carifred/WUAManager/releases/latest/download/WUAManager.exe"
+    $outputPath = Join-Path -Path $env:TEMP -ChildPath "WUAManager.exe"
+
+    try {
+        if (Test-Path $outputPath) {
+            Remove-Item -Path $outputPath -Force -ErrorAction SilentlyContinue
+        }
+
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "Launching WUAManager from $outputPath" -ForegroundColor Green
+        Start-Process -FilePath $outputPath
+    }
+    catch {
+        Write-Error "Failed to download or launch WUAManager."
+        Write-Error $_.Exception.Message
+    }
 }
 
 function Reset-WindowsStore {
