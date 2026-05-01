@@ -69,31 +69,36 @@ function Show-MainMenu {
     Write-Host "========================================================================" -ForegroundColor Green
     Write-Host "Detected OS: $osName"
     Write-Host
-    Write-Host "    1. Open System Protection"
+    Write-Host "--- Windows Update Tools ---" -ForegroundColor Yellow
     Write-Host "    2. Reset Windows Update Components"
-    Write-Host "    3. Delete Temporary Files"
-    Write-Host "    4. Open Internet Options"
-    Write-Host "    5. Run Chkdsk on the Windows Partition"
+    Write-Host "   10. Clean Up Superseded Components (DISM StartComponentCleanup)"
+    Write-Host "   14. Manage Windows Updates"
+    Write-Host "   15. Reset the Windows Store"
     Write-Host
-    Write-Host "--- System File Repair (Recommended Order) ---" -ForegroundColor Yellow
+    Write-Host "--- System Repair ---" -ForegroundColor Yellow
+    Write-Host "    5. Run Chkdsk on the Windows Partition"
     Write-Host "    6. Check if Image is Flagged as Corrupted (DISM CheckHealth)"
     Write-Host "    7. Scan Image for Component Store Corruption (DISM ScanHealth)"
     Write-Host "    8. Perform Repair Operations Automatically (DISM RestoreHealth)"
     Write-Host "    9. Run System File Checker (SFC)"
+    Write-Host "   21. Query recent CHKDSK results"
     Write-Host
-    Write-Host "--- Other System Tools ---" -ForegroundColor Yellow
-    Write-Host "   10. Clean Up Superseded Components (DISM StartComponentCleanup)"
+    Write-Host "--- Network & Policy ---" -ForegroundColor Yellow
+    Write-Host "    4. Open Internet Options"
     Write-Host "   11. Delete Incorrect Registry Values"
     Write-Host "   12. Repair/Reset Winsock Settings"
     Write-Host "   13. Force Group Policy Update"
-    Write-Host "   14. Manage Windows Updates"
-    Write-Host "   15. Reset the Windows Store"
+    Write-Host
+    Write-Host "--- Utilities ---" -ForegroundColor Yellow
+    Write-Host "    1. Open System Protection"
+    Write-Host "    3. Delete Temporary Files"
     Write-Host "   16. Find the Windows Product Key"
-    Write-Host "   17. Explore Other Local Solutions (Troubleshooting)"
-    Write-Host "   18. Explore Other Online Solutions"
+    Write-Host "   17. Launch Windows Troubleshooters"
+    Write-Host "   18. Open Windows Update Support Website"
+    Write-Host
+    Write-Host "--- Restart & Scheduling ---" -ForegroundColor Yellow
     Write-Host "   19. Restart Your PC (Immediate)"
     Write-Host "   20. Schedule a One-Time Reboot"
-    Write-Host "   21. Query recent CHKDSK results"
     Write-Host
     Write-Host "    q. Quit"
     Write-Host
