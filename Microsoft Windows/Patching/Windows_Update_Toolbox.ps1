@@ -96,6 +96,7 @@ function Show-MainMenu {
     Write-Host "   16. Find the Windows Product Key"
     Write-Host "   17. Launch Windows Troubleshooters"
     Write-Host "   18. Open Windows Update Support Website"
+    Write-Host "   23. Check Disk Health (Clear Disk Info)"
     Write-Host
     Write-Host "--- Restart & Scheduling ---" -ForegroundColor Yellow
     Write-Host "   19. Restart Your PC (Immediate)"
@@ -393,6 +394,27 @@ function Run-WUAManager {
     }
 }
 
+function Start-ClearDiskInfo {
+    Write-Host "Downloading and launching Clear Disk Info..." -ForegroundColor Cyan
+    $downloadUrl = "https://www.cleandiskinfo.com/downloads/cleandiskim.exe"
+    $outputPath = Join-Path -Path $env:TEMP -ChildPath "ClearDiskInfo.exe"
+
+    try {
+        if (Test-Path $outputPath) {
+            Remove-Item -Path $outputPath -Force -ErrorAction SilentlyContinue
+        }
+
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
+        Write-Host "Launching Clear Disk Info from $outputPath" -ForegroundColor Green
+        # Start with dark mode enabled using common command-line switches
+        Start-Process -FilePath $outputPath -ArgumentList "/darkMode", "/dark"
+    }
+    catch {
+        Write-Error "Failed to download or launch Clear Disk Info."
+        Write-Error $_.Exception.Message
+    }
+}
+
 function Reset-WindowsStore {
     Write-Host "Resetting the Windows Store cache..." -ForegroundColor Cyan
     Start-Process wsreset.exe -Wait
@@ -483,6 +505,7 @@ do {
         "20" { Schedule-OneTimeReboot }
         "21" { Show-ChkdskResults }
         "22" { Test-DriveDirtyBit }
+        "23" { Start-ClearDiskInfo }
         "q"  { Write-Host "Exiting script." }
         default { Write-Warning "Invalid option. Please try again." }
     }
