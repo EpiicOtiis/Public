@@ -384,13 +384,27 @@ function Run-WUAManager {
             Remove-Item -Path $outputPath -Force -ErrorAction SilentlyContinue
         }
 
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
-        Write-Host "Launching WUAManager from $outputPath" -ForegroundColor Green
-        Start-Process -FilePath $outputPath
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
+        try {
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop
+        }
+        catch {
+            Write-Warning "Invoke-WebRequest failed, trying BITS transfer as a fallback..."
+            Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+        }
+
+        if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -eq 0) {
+            throw "Download completed but the file is missing or empty."
+        }
+
+        Write-Host "Downloaded WUAManager to $outputPath" -ForegroundColor Green
+        Start-Process -FilePath $outputPath -ErrorAction Stop
     }
     catch {
         Write-Error "Failed to download or launch WUAManager."
         Write-Error $_.Exception.Message
+        Write-Error "If this continues, try downloading WUAManager manually from $downloadUrl."
     }
 }
 
