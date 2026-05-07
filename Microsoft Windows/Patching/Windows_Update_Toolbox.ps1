@@ -139,6 +139,7 @@ function Show-MainMenu {
     Write-Host "   17. Launch Windows Troubleshooters"
     Write-Host "   18. Open Windows Update Support Website"
     Write-Host "   23. Check Disk Health (Clear Disk Info)"
+    Write-Host "   24. Query recent SFC results"
     Write-Host
     Write-Host "--- Restart & Scheduling ---" -ForegroundColor Yellow
     Write-Host "   19. Restart Your PC (Immediate)"
@@ -251,6 +252,56 @@ function Show-ChkdskResults {
         }
     } else {
         Write-Host "No recent CHKDSK results found in the Application event log." -ForegroundColor Yellow
+    }
+}
+
+function Show-SFCResults {
+    Write-Host "Querying recent SFC results from the CBS.log file..." -ForegroundColor Cyan
+    $countInput = Read-Host "How many recent SFC results do you want to display? Press Enter for the most recent run"
+    $count = 1
+
+    if (-not [string]::IsNullOrWhiteSpace($countInput)) {
+        if (-not [int]::TryParse($countInput, [ref]$count) -or $count -lt 1) {
+            Write-Warning "Invalid number provided. Defaulting to the most recent run."
+            $count = 1
+        }
+    }
+
+    $cbsLogPath = "$env:windir\Logs\CBS\CBS.log"
+
+    if (-not (Test-Path $cbsLogPath)) {
+        Write-Host "CBS.log file not found at $cbsLogPath" -ForegroundColor Red
+        return
+    }
+
+    try {
+        # Read the CBS.log file and extract SFC completion entries
+        $sfcResults = Get-Content $cbsLogPath -Tail 10000 | 
+            Where-Object { $_ -match "CSI.*SFC.*completed" -or $_ -match "SFC.*completed" -or $_ -match "Verify and Repair Transaction completed" } |
+            Select-Object -Last $count
+
+        if ($sfcResults) {
+            Write-Host "Recent SFC Results:" -ForegroundColor Green
+            $sfcResults | ForEach-Object {
+                # Parse the log line to extract timestamp and result
+                if ($_ -match '^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}), (.+)$') {
+                    $timestamp = $matches[1]
+                    $message = $matches[2]
+                    Write-Host "[$timestamp] $message" -ForegroundColor Yellow
+                } else {
+                    Write-Host $_ -ForegroundColor Yellow
+                }
+            }
+            
+            if ($sfcResults.Count -lt $count) {
+                Write-Host "Only $($sfcResults.Count) SFC result(s) were found, which is fewer than the requested $count." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "No recent SFC results found in CBS.log." -ForegroundColor Yellow
+            Write-Host "Note: SFC results are logged to $cbsLogPath" -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Error "Failed to read CBS.log: $_"
     }
 }
 
@@ -1078,6 +1129,7 @@ do {
         "21" { Show-ChkdskResults }
         "22" { Test-DriveDirtyBit }
         "23" { Start-ClearDiskInfo }
+        "24" { Show-SFCResults }
         "q"  { Write-Host "Exiting script." }
         default { Write-Warning "Invalid option. Please try again." }
     }
