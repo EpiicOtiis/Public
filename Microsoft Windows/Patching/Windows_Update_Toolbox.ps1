@@ -256,13 +256,34 @@ function Start-DismScan {
             try {
                 Write-Host "Mounting ISO and running DISM RestoreHealth with local source..." -ForegroundColor Cyan
                 $driveLetter = Mount-ISO -isoPath $isoPath
+                
+                # Ensure drive letter has colon for proper path construction
+                if ($driveLetter -notmatch ':$') {
+                    $driveLetter = "$driveLetter`:"
+                }
+                
                 $sourcePath = Join-Path $driveLetter "Sources\install.wim"
                 if (-not (Test-Path $sourcePath)) {
                     $sourcePath = Join-Path $driveLetter "Sources\install.esd"
                 }
 
                 if (-not (Test-Path $sourcePath)) {
-                    throw "No install.wim or install.esd was found inside the mounted ISO."
+                    # Provide diagnostics - list what's actually on the ISO
+                    Write-Host "Diagnostic: Contents of mounted ISO at $driveLetter" -ForegroundColor Yellow
+                    $isoContents = Get-ChildItem -Path $driveLetter -ErrorAction SilentlyContinue
+                    if ($isoContents) {
+                        $isoContents | Format-Table Name, PSIsContainer -AutoSize
+                    } else {
+                        Write-Host "Unable to list ISO contents" -ForegroundColor Red
+                    }
+                    
+                    $sourcesFolder = Join-Path $driveLetter "Sources"
+                    if (Test-Path $sourcesFolder) {
+                        Write-Host "Contents of $sourcesFolder`:" -ForegroundColor Yellow
+                        Get-ChildItem -Path $sourcesFolder | Format-Table Name, Length -AutoSize
+                    }
+                    
+                    throw "No install.wim or install.esd was found inside the mounted ISO at $sourcesFolder"
                 }
 
                 $sourceArg = if ($sourcePath -like "*.wim") {
@@ -323,6 +344,62 @@ function Get-DISMRepairMethod {
     } while ($true)
 }
 
+function Show-FilePickerDialog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$Title = "Select File",
+        
+        [Parameter(Mandatory=$false)]
+        [string]$Filter = "All Files (*.*)|*.*",
+        
+        [Parameter(Mandatory=$false)]
+        [string]$InitialDirectory = $env:UserProfile
+    )
+    
+    try {
+        # Load Windows Forms assembly
+        Add-Type -AssemblyName System.Windows.Forms
+        
+        $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $openFileDialog.Title = $Title
+        $openFileDialog.Filter = $Filter
+        $openFileDialog.InitialDirectory = $InitialDirectory
+        $openFileDialog.CheckFileExists = $true
+        $openFileDialog.CheckPathExists = $true
+        
+        $result = $openFileDialog.ShowDialog()
+        
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+            return $openFileDialog.FileName
+        }
+        else {
+            return $null
+        }
+    }
+    catch {
+        Write-Error "File picker dialog failed: $_"
+        # Fallback to manual text entry
+        Write-Host "File picker unavailable. Please enter the ISO file path manually:" -ForegroundColor Yellow
+        $manualPath = Read-Host "Enter full path to ISO file"
+        return $manualPath
+    }
+}
+
+function Get-DISMRepairMethod {
+    do {
+        Write-Host "Select the DISM RestoreHealth repair method:" -ForegroundColor Yellow
+        Write-Host "  1. Online repair (default Windows Update / configured source)"
+        Write-Host "  2. ISO repair (local or downloaded Windows ISO source)"
+        $choice = Read-Host "Enter 1 or 2"
+        switch ($choice) {
+            '1' { return 'Online' }
+            '2' { return 'ISO' }
+            default { Write-Warning "Invalid selection; please enter 1 or 2." }
+        }
+    } while ($true)
+}
+
 function Get-RepairISOPath {
     $isoMap = @{
         '10-22H2' = 'https://networkpeopleinc.sharepoint.com/sites/NPI-External/_layouts/15/download.aspx?share=EXYvembfJz1KvgXctVfa76ABCz5aowkfUznvhg6e8vrruA&e=eaJ1aB'
@@ -350,14 +427,40 @@ function Get-RepairISOPath {
         return $null
     }
 
+    $tempIsoPath = Join-Path -Path $env:TEMP -ChildPath "RepairSource_$($chosen.Key).iso"
+    
     $haveLocalISO = Read-Host "Do you already have a local ISO file for $($chosen.Label)? (y/n)"
     if ($haveLocalISO -eq 'y') {
-        $localPath = Read-Host "Enter the full path to the ISO file"
+        # First check if the downloaded file exists for this version
+        if (Test-Path $tempIsoPath) {
+            $existingFile = Get-Item $tempIsoPath
+            $sizeGB = [math]::Round($existingFile.Length / 1GB, 2)
+            Write-Host "Found previously downloaded ISO: $tempIsoPath ($sizeGB GB)" -ForegroundColor Yellow
+            
+            $useDownloaded = Read-Host "Use this file? (y/n)"
+            if ($useDownloaded -eq 'y') {
+                Write-Host "Using downloaded ISO: $tempIsoPath" -ForegroundColor Green
+                return $tempIsoPath
+            }
+        }
+        
+        # If not using the downloaded file, prompt for manual file selection
+        Write-Host "Opening file picker to select your ISO file..." -ForegroundColor Cyan
+        $localPath = Show-FilePickerDialog -Title "Select Windows ISO File" -Filter "ISO Files (*.iso)|*.iso|All Files (*.*)|*.*"
+        
+        if (-not $localPath) {
+            Write-Host "File selection cancelled." -ForegroundColor Yellow
+            return $null
+        }
+        
         if (Test-Path $localPath) {
+            Write-Host "Using local ISO: $localPath" -ForegroundColor Green
             return $localPath
         }
-        Write-Error "Local ISO path not found: $localPath"
-        return $null
+        else {
+            Write-Error "Local ISO path not found: $localPath"
+            return $null
+        }
     }
 
     $tempIsoPath = Join-Path -Path $env:TEMP -ChildPath "RepairSource_$($chosen.Key).iso"
