@@ -79,7 +79,7 @@ function Show-MainMenu {
     Write-Host "    5. Run Chkdsk on the Windows Partition"
     Write-Host "    6. Check if Image is Flagged as Corrupted (DISM CheckHealth)"
     Write-Host "    7. Scan Image for Component Store Corruption (DISM ScanHealth)"
-    Write-Host "    8. Perform Repair Operations Automatically (DISM RestoreHealth)"
+    Write-Host "    8. Perform Repair Operations Automatically (DISM RestoreHealth - Online or ISO source)"
     Write-Host "    9. Run System File Checker (SFC)"
     Write-Host "   21. Query recent CHKDSK results"
     Write-Host "   22. Check Windows drive dirty bit"
@@ -243,9 +243,162 @@ function Start-SFCScan {
 
 function Start-DismScan {
     param($Argument)
+
+    if ($Argument -eq "/RestoreHealth") {
+        $method = Get-DISMRepairMethod
+        if ($method -eq 'ISO') {
+            $isoPath = Get-RepairISOPath
+            if (-not $isoPath) {
+                Write-Warning "ISO repair cancelled or source not found."
+                return
+            }
+
+            try {
+                Write-Host "Mounting ISO and running DISM RestoreHealth with local source..." -ForegroundColor Cyan
+                $driveLetter = Mount-ISO -isoPath $isoPath
+                $sourcePath = Join-Path $driveLetter "Sources\install.wim"
+                if (-not (Test-Path $sourcePath)) {
+                    $sourcePath = Join-Path $driveLetter "Sources\install.esd"
+                }
+
+                if (-not (Test-Path $sourcePath)) {
+                    throw "No install.wim or install.esd was found inside the mounted ISO."
+                }
+
+                $sourceArg = if ($sourcePath -like "*.wim") {
+                    "/Source:WIM:$sourcePath:1"
+                } else {
+                    "/Source:ESD:$sourcePath:1"
+                }
+
+                Write-Host "Using source file: $sourcePath" -ForegroundColor Green
+                Write-Host "This process can take some time." -ForegroundColor Yellow
+                Start-Process cmd.exe -ArgumentList "/c Dism.exe /Online /Cleanup-Image /RestoreHealth $sourceArg /LimitAccess & pause" -Verb RunAs -Wait
+            }
+            catch {
+                Write-Error "ISO-based RestoreHealth failed: $_"
+            }
+            finally {
+                Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue
+            }
+        }
+        else {
+            Write-Host "Starting online DISM RestoreHealth repair..." -ForegroundColor Cyan
+            Write-Host "This process can take some time." -ForegroundColor Yellow
+            Start-Process cmd.exe -ArgumentList "/c Dism.exe /Online /Cleanup-Image /RestoreHealth & pause" -Verb RunAs
+        }
+
+        return
+    }
+
+    if ($Argument -eq "/ScanHealth") {
+        Write-Host "This will open a new window to run DISM ScanHealth." -ForegroundColor Yellow
+        Write-Host "This process can take some time." -ForegroundColor Yellow
+        Start-Process cmd.exe -ArgumentList "/c Dism.exe /Online /Cleanup-Image /ScanHealth & pause" -Verb RunAs
+
+        $repairNow = Read-Host "DISM ScanHealth complete. Do you want to run RestoreHealth now? (y/n)"
+        if ($repairNow -eq 'y') {
+            Start-DismScan -Argument "/RestoreHealth"
+        }
+
+        return
+    }
+
     Write-Host "This will open a new window to run DISM with the $Argument switch." -ForegroundColor Yellow
     Write-Host "This process can take some time." -ForegroundColor Yellow
     Start-Process cmd.exe -ArgumentList "/c Dism.exe /Online /Cleanup-Image $Argument & pause" -Verb RunAs
+}
+
+function Get-DISMRepairMethod {
+    do {
+        Write-Host "Select the DISM RestoreHealth repair method:" -ForegroundColor Yellow
+        Write-Host "  1. Online repair (default Windows Update / configured source)"
+        Write-Host "  2. ISO repair (local or downloaded Windows ISO source)"
+        $choice = Read-Host "Enter 1 or 2"
+        switch ($choice) {
+            '1' { return 'Online' }
+            '2' { return 'ISO' }
+            default { Write-Warning "Invalid selection; please enter 1 or 2." }
+        }
+    } while ($true)
+}
+
+function Get-RepairISOPath {
+    $isoMap = @{
+        '10-22H2' = 'https://networkpeopleinc.sharepoint.com/sites/NPI-External/_layouts/15/download.aspx?share=EXYvembfJz1KvgXctVfa76ABCz5aowkfUznvhg6e8vrruA&e=eaJ1aB'
+        '11-23H2' = 'https://networkpeopleinc.sharepoint.com/sites/NPI-External/_layouts/15/download.aspx?share=EfdQEs-VpLNGgHHhfXibEQ8BIGElBVW53x_k-vUMs6JOQw&e=dR4GuU'
+        '11-24H2' = 'https://networkpeopleinc.sharepoint.com/sites/NPI-External/_layouts/15/download.aspx?share=EfHJfrP5Og5HmJYtwWRmUjABogqLNb_htumy92S5f8dxGg&e=HMeacl'
+        '11-25H2' = 'https://integristech-my.sharepoint.com/personal/aaron_pleus_integrisit_com/_layouts/15/download.aspx?share=IQBl8nXUkBlZT5LlvumdTuGmARK7h78TJeR6-qNzEI9u7NQ'
+    }
+
+    $options = @(
+        @{ Number = 1; Label = 'Windows 10 22H2'; Key = '10-22H2' }
+        @{ Number = 2; Label = 'Windows 11 23H2'; Key = '11-23H2' }
+        @{ Number = 3; Label = 'Windows 11 24H2'; Key = '11-24H2' }
+        @{ Number = 4; Label = 'Windows 11 25H2'; Key = '11-25H2' }
+    )
+
+    Write-Host "Choose the Windows ISO source for DISM repair:" -ForegroundColor Yellow
+    foreach ($opt in $options) {
+        Write-Host "  $($opt.Number). $($opt.Label)"
+    }
+
+    $selection = Read-Host "Enter 1-4"
+    $chosen = $options | Where-Object { $_.Number -eq [int]$selection }
+    if (-not $chosen) {
+        Write-Warning "Invalid selection."
+        return $null
+    }
+
+    $haveLocalISO = Read-Host "Do you already have a local ISO file for $($chosen.Label)? (y/n)"
+    if ($haveLocalISO -eq 'y') {
+        $localPath = Read-Host "Enter the full path to the ISO file"
+        if (Test-Path $localPath) {
+            return $localPath
+        }
+        Write-Error "Local ISO path not found: $localPath"
+        return $null
+    }
+
+    $tempIsoPath = Join-Path -Path $env:TEMP -ChildPath "RepairSource_$($chosen.Key).iso"
+    if (-not (Test-Path $tempIsoPath)) {
+        Write-Host "Downloading the selected ISO to $tempIsoPath" -ForegroundColor Cyan
+        try {
+            Invoke-WebRequest -Uri $isoMap[$chosen.Key] -OutFile $tempIsoPath -UseBasicParsing -ErrorAction Stop
+            Write-Host "Download complete." -ForegroundColor Green
+        }
+        catch {
+            Write-Error "Failed to download ISO: $_"
+            return $null
+        }
+    }
+    else {
+        Write-Host "Using existing downloaded ISO: $tempIsoPath" -ForegroundColor Green
+    }
+
+    return $tempIsoPath
+}
+
+function Mount-ISO {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$isoPath
+    )
+    try {
+        Write-Verbose "Attempting to mount ISO: $isoPath"
+        $mountResult = Mount-DiskImage -ImagePath $isoPath -PassThru
+        $driveLetter = ($mountResult | Get-Volume).DriveLetter
+        if ($driveLetter) {
+            Write-Verbose "ISO mounted successfully. Drive letter: $driveLetter"
+            return $driveLetter
+        } else {
+            throw "Failed to get drive letter after mounting ISO."
+        }
+    } catch {
+        Write-Error "Failed to mount ISO: $_"
+        throw $_
+    }
 }
 
 function Reset-RegistryKeys {
@@ -427,7 +580,7 @@ function Run-WUAManager {
 
 function Start-ClearDiskInfo {
     Write-Host "Downloading and launching Clear Disk Info..." -ForegroundColor Cyan
-    $downloadUrl = "https://www.cleandiskinfo.com/downloads/cleandiskim.exe"
+    $downloadUrl = "https://www.carifred.com/cleardiskinfo/ClearDiskInfo.exe"
     $outputPath = Join-Path -Path $env:TEMP -ChildPath "ClearDiskInfo.exe"
 
     try {
@@ -435,14 +588,45 @@ function Start-ClearDiskInfo {
             Remove-Item -Path $outputPath -Force -ErrorAction SilentlyContinue
         }
 
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -UseBasicParsing -ErrorAction Stop
-        Write-Host "Launching Clear Disk Info from $outputPath" -ForegroundColor Green
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+
+        $downloadSuccess = $false
+        $downloadErrors = @()
+
+        try {
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop
+            $downloadSuccess = $true
+        }
+        catch {
+            $downloadErrors += "Invoke-WebRequest: $($_.Exception.Message)"
+            Write-Warning "Invoke-WebRequest failed; trying BITS transfer as fallback..."
+        }
+
+        if (-not $downloadSuccess) {
+            try {
+                Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+                $downloadSuccess = $true
+            }
+            catch {
+                $downloadErrors += "BITS: $($_.Exception.Message)"
+            }
+        }
+
+        if (-not $downloadSuccess -or -not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -eq 0) {
+            throw "Unable to download Clear Disk Info. Details: $($downloadErrors -join ' | ')"
+        }
+
+        Write-Host "Downloaded Clear Disk Info to $outputPath" -ForegroundColor Green
         # Start with dark mode enabled using common command-line switches
-        Start-Process -FilePath $outputPath -ArgumentList "/darkMode", "/dark"
+        Start-Process -FilePath $outputPath -ArgumentList "/darkMode", "/dark" -ErrorAction Stop
     }
     catch {
         Write-Error "Failed to download or launch Clear Disk Info."
         Write-Error $_.Exception.Message
+        if ($downloadErrors) {
+            Write-Error "Download diagnostics: $($downloadErrors -join ' ; ')"
+        }
+        Write-Error "If this continues, try downloading Clear Disk Info manually from $downloadUrl."
     }
 }
 
