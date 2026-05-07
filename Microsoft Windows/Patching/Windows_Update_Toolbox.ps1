@@ -376,7 +376,7 @@ function Manage-WindowsUpdatesPowerShell {
 
 function Run-WUAManager {
     Write-Host "Downloading and launching WUAManager..." -ForegroundColor Cyan
-    $downloadUrl = "https://github.com/Carifred/WUAManager/releases/latest/download/WUAManager.exe"
+    $downloadUrl = "https://www.carifred.com/wau_manager/WAUManager.exe"
     $outputPath = Join-Path -Path $env:TEMP -ChildPath "WUAManager.exe"
 
     try {
@@ -390,25 +390,12 @@ function Run-WUAManager {
         $downloadErrors = @()
 
         try {
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop -MaximumRedirection 10
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop
             $downloadSuccess = $true
         }
         catch {
             $downloadErrors += "Invoke-WebRequest: $($_.Exception.Message)"
-            Write-Warning "Invoke-WebRequest failed; attempting fallback methods..."
-        }
-
-        if (-not $downloadSuccess) {
-            try {
-                $webClient = New-Object System.Net.WebClient
-                $webClient.Proxy.Credentials = [Net.CredentialCache]::DefaultCredentials
-                $webClient.DownloadFile($downloadUrl, $outputPath)
-                $downloadSuccess = $true
-            }
-            catch {
-                $downloadErrors += "WebClient: $($_.Exception.Message)"
-                Write-Warning "WebClient download failed; trying BITS transfer..."
-            }
+            Write-Warning "Invoke-WebRequest failed; trying BITS transfer as fallback..."
         }
 
         if (-not $downloadSuccess) {
