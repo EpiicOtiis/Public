@@ -451,10 +451,10 @@ function Get-RepairISOPath {
     }
 
     $options = @(
-        @{ Number = 1; Label = 'Windows 10 22H2'; Key = '10-22H2' }
-        @{ Number = 2; Label = 'Windows 11 23H2'; Key = '11-23H2' }
-        @{ Number = 3; Label = 'Windows 11 24H2'; Key = '11-24H2' }
-        @{ Number = 4; Label = 'Windows 11 25H2'; Key = '11-25H2' }
+        @{ Number = 1; Label = 'Windows 10 22H2 (Build 19045)'; Key = '10-22H2' }
+        @{ Number = 2; Label = 'Windows 11 23H2 (Build 22631)'; Key = '11-23H2' }
+        @{ Number = 3; Label = 'Windows 11 24H2 (Build 26100)'; Key = '11-24H2' }
+        @{ Number = 4; Label = 'Windows 11 25H2 (Build 26200)'; Key = '11-25H2' }
     )
 
     $currentOS = Get-CimInstance Win32_OperatingSystem
