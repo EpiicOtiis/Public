@@ -31,10 +31,48 @@ function Request-Administrator {
     }
 }
 
-function Test-SupportedOS {
+function Get-SystemDetails {
     $osInfo = Get-CimInstance Win32_OperatingSystem
-    $osName = $osInfo.Caption
-    $osBuild = $osInfo.BuildNumber
+    $csInfo = Get-CimInstance Win32_ComputerSystem
+    $cpuInfo = Get-CimInstance Win32_Processor | Select-Object -First 1
+    $biosInfo = Get-CimInstance Win32_BIOS | Select-Object -First 1
+    $netAdapters = Get-NetAdapter -ErrorAction SilentlyContinue
+
+    if (-not $netAdapters) {
+        $netAdapters = Get-CimInstance Win32_NetworkAdapter -Filter "NetEnabled = TRUE" | Select-Object @{Name='Name';Expression={$_.Name}}, @{Name='InterfaceDescription';Expression={$_.Description}}, @{Name='Status';Expression={ if ($_.NetConnectionStatus -eq 2) { 'Up' } else { 'Down' } }}
+    }
+
+    $connectedAdapters = $netAdapters | Where-Object { $_.Status -eq 'Up' }
+    $networkSummary = if ($connectedAdapters) {
+        ($connectedAdapters | ForEach-Object { "$($_.Name) ($($_.InterfaceDescription))" } | Sort-Object) -join ', '
+    }
+    else {
+        if ($netAdapters) {
+            ($netAdapters | ForEach-Object { "$($_.Name) [$($_.Status)]" } | Sort-Object) -join ', '
+        }
+        else {
+            'No network adapters detected.'
+        }
+    }
+
+    [PSCustomObject]@{
+        OSCaption = $osInfo.Caption
+        OSBuild = $osInfo.BuildNumber
+        OSVersion = $osInfo.Version
+        Manufacturer = $csInfo.Manufacturer
+        Model = $csInfo.Model
+        SerialNumber = $biosInfo.SerialNumber
+        Processor = $cpuInfo.Name
+        TotalPhysicalMemoryGB = [math]::Round($csInfo.TotalPhysicalMemory / 1GB, 2)
+        ConnectedNetworkAdapters = $networkSummary
+        ComputerName = $csInfo.Name
+    }
+}
+
+function Test-SupportedOS {
+    $systemDetails = Get-SystemDetails
+    $osName = $systemDetails.OSCaption
+    $osBuild = [int]$systemDetails.OSBuild
 
     $isSupported = $false
     $detectedOS = "Unsupported Operating System"
@@ -57,17 +95,21 @@ function Test-SupportedOS {
         exit
     }
     
-    # Return the OS name for display purposes
-    return $detectedOS
+    return $systemDetails
 }
 
 function Show-MainMenu {
-    param($osName)
+    param($systemDetails)
     Clear-Host
     Write-Host "========================================================================" -ForegroundColor Green
     Write-Host "          Windows Update Toolbox [PowerShell Edition]" -ForegroundColor Green
     Write-Host "========================================================================" -ForegroundColor Green
-    Write-Host "Detected OS: $osName"
+    Write-Host "Detected OS: $($systemDetails.OSCaption) (Build $($systemDetails.OSBuild))"
+    Write-Host "Manufacturer: $($systemDetails.Manufacturer) $($systemDetails.Model)"
+    Write-Host "Serial Number: $($systemDetails.SerialNumber)"
+    Write-Host "Processor: $($systemDetails.Processor)"
+    Write-Host "Installed RAM: $($systemDetails.TotalPhysicalMemoryGB) GB"
+    Write-Host "Network: $($systemDetails.ConnectedNetworkAdapters)"
     Write-Host
     Write-Host "--- Windows Update Tools ---" -ForegroundColor Yellow
     Write-Host "    2. Reset Windows Update Components"
@@ -415,6 +457,8 @@ function Get-RepairISOPath {
         @{ Number = 4; Label = 'Windows 11 25H2'; Key = '11-25H2' }
     )
 
+    $currentOS = Get-CimInstance Win32_OperatingSystem
+    Write-Host "Current system build: $($currentOS.Caption) (Build $($currentOS.BuildNumber))" -ForegroundColor Cyan
     Write-Host "Choose the Windows ISO source for DISM repair:" -ForegroundColor Yellow
     foreach ($opt in $options) {
         Write-Host "  $($opt.Number). $($opt.Label)"
@@ -886,11 +930,11 @@ function Schedule-OneTimeReboot {
 Request-Administrator
 
 # 2. Check for supported OS
-$os = Test-SupportedOS
+$systemDetails = Test-SupportedOS
 
 # 3. Main script loop
 do {
-    Show-MainMenu -osName $os
+    Show-MainMenu -systemDetails $systemDetails
     $selection = Read-Host "Please select an option"
     
     Clear-Host
