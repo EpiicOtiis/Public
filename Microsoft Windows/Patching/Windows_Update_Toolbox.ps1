@@ -328,13 +328,16 @@ function Start-DismScan {
                     throw "No install.wim or install.esd was found inside the mounted ISO at $sourcesFolder"
                 }
 
+                # Get the appropriate image index from the WIM/ESD file
+                $imageIndex = Get-WIMImageIndex -wimPath $sourcePath
+
                 $sourceArg = if ($sourcePath -like "*.wim") {
-                    "/Source:WIM:$sourcePath:1"
+                    "/Source:WIM:$sourcePath:$imageIndex"
                 } else {
-                    "/Source:ESD:$sourcePath:1"
+                    "/Source:ESD:$sourcePath:$imageIndex"
                 }
 
-                Write-Host "Using source file: $sourcePath" -ForegroundColor Green
+                Write-Host "Using source file: $sourcePath (Index: $imageIndex)" -ForegroundColor Green
                 Write-Host "This process can take some time." -ForegroundColor Yellow
                 Start-Process cmd.exe -ArgumentList "/c Dism.exe /Online /Cleanup-Image /RestoreHealth $sourceArg /LimitAccess & pause" -Verb RunAs -Wait
             }
@@ -640,6 +643,119 @@ function Mount-ISO {
     } catch {
         Write-Error "Failed to mount ISO: $_"
         throw $_
+    }
+}
+
+function Get-WIMImageIndex {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$wimPath
+    )
+
+    try {
+        Write-Host "Querying available images in $wimPath..." -ForegroundColor Cyan
+
+        # Run DISM to get image info
+        $dismOutput = & dism.exe /Get-ImageInfo /ImageFile:$wimPath 2>&1
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to query image info. Falling back to index 1."
+            return 1
+        }
+
+        # Parse the output to extract image indices and names
+        $images = @()
+        $currentImage = $null
+        $inImageSection = $false
+
+        foreach ($line in $dismOutput) {
+            $line = $line.Trim()
+
+            # Look for "Index :" to start parsing an image
+            if ($line -match '^Index\s*:\s*(\d+)$') {
+                if ($currentImage) {
+                    $images += $currentImage
+                }
+                $currentImage = @{
+                    Index = [int]$matches[1]
+                    Name = ""
+                    Description = ""
+                }
+                $inImageSection = $true
+            }
+            elseif ($inImageSection -and $line -match '^Name\s*:\s*(.+)$') {
+                $currentImage.Name = $matches[1].Trim()
+            }
+            elseif ($inImageSection -and $line -match '^Description\s*:\s*(.+)$') {
+                $currentImage.Description = $matches[1].Trim()
+            }
+        }
+
+        # Add the last image
+        if ($currentImage) {
+            $images += $currentImage
+        }
+
+        if ($images.Count -eq 0) {
+            Write-Warning "No images found in WIM file. Falling back to index 1."
+            return 1
+        }
+
+        # Get current system edition
+        $osInfo = Get-CimInstance Win32_OperatingSystem
+        $currentEdition = $osInfo.Caption
+
+        Write-Host "Current system: $currentEdition" -ForegroundColor Green
+        Write-Host "Available images in WIM:" -ForegroundColor Cyan
+
+        foreach ($image in $images) {
+            $status = ""
+            if ($image.Name -and $currentEdition -like "*$($image.Name)*") {
+                $status = " [MATCH]"
+            }
+            Write-Host "  Index $($image.Index): $($image.Name) - $($image.Description)$status" -ForegroundColor Yellow
+        }
+
+        # Try to find the best match
+        $bestMatch = $null
+
+        # First, look for exact edition matches
+        foreach ($image in $images) {
+            if ($image.Name -and $currentEdition -like "*$($image.Name)*") {
+                $bestMatch = $image
+                break
+            }
+        }
+
+        # If no exact match, try partial matches
+        if (-not $bestMatch) {
+            foreach ($image in $images) {
+                if ($image.Name -and ($currentEdition -match $image.Name -or $image.Name -match $currentEdition)) {
+                    $bestMatch = $image
+                    break
+                }
+            }
+        }
+
+        # If still no match, use the first Professional or Home edition, or just the first one
+        if (-not $bestMatch) {
+            $bestMatch = $images | Where-Object { $_.Name -like "*Professional*" } | Select-Object -First 1
+            if (-not $bestMatch) {
+                $bestMatch = $images | Where-Object { $_.Name -like "*Home*" } | Select-Object -First 1
+            }
+            if (-not $bestMatch) {
+                $bestMatch = $images[0]
+            }
+        }
+
+        Write-Host "Selected image: Index $($bestMatch.Index) - $($bestMatch.Name)" -ForegroundColor Green
+        return $bestMatch.Index
+
+    } catch {
+        Write-Warning "Error querying WIM image info: $_"
+        Write-Warning "Falling back to index 1."
+        return 1
     }
 }
 
