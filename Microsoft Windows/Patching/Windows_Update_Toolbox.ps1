@@ -617,8 +617,7 @@ function Start-ClearDiskInfo {
         }
 
         Write-Host "Downloaded Clear Disk Info to $outputPath" -ForegroundColor Green
-        # Start with dark mode enabled using common command-line switches
-        Start-Process -FilePath $outputPath -ArgumentList "/darkMode", "/dark" -ErrorAction Stop
+        Start-Process -FilePath $outputPath -ErrorAction Stop
     }
     catch {
         Write-Error "Failed to download or launch Clear Disk Info."
