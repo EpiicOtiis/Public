@@ -363,12 +363,90 @@ function Get-RepairISOPath {
     $tempIsoPath = Join-Path -Path $env:TEMP -ChildPath "RepairSource_$($chosen.Key).iso"
     if (-not (Test-Path $tempIsoPath)) {
         Write-Host "Downloading the selected ISO to $tempIsoPath" -ForegroundColor Cyan
-        try {
-            Invoke-WebRequest -Uri $isoMap[$chosen.Key] -OutFile $tempIsoPath -UseBasicParsing -ErrorAction Stop
-            Write-Host "Download complete." -ForegroundColor Green
+        Write-Host "Note: Large ISO files may take 10-30+ minutes depending on connection speed." -ForegroundColor Yellow
+        
+        $downloadSuccess = $false
+        $downloadErrors = @()
+        $maxRetries = 3
+        $retryCount = 0
+
+        # Try BITS transfer first (better for large files and resumes on failure)
+        while (-not $downloadSuccess -and $retryCount -lt $maxRetries) {
+            try {
+                Write-Host "Attempting BITS transfer (Attempt $($retryCount + 1) of $maxRetries)..." -ForegroundColor Cyan
+                $bitsJob = Start-BitsTransfer -Source $isoMap[$chosen.Key] -Destination $tempIsoPath -Asynchronous -DisplayName "ISORepairDownload" -ErrorAction Stop
+                
+                # Monitor progress
+                do {
+                    Start-Sleep -Seconds 5
+                    $bitsJob = Get-BitsTransfer -JobId $bitsJob.JobId
+                    if ($bitsJob.BytesTotal -gt 0) {
+                        $percent = [math]::Round(($bitsJob.BytesTransferred / $bitsJob.BytesTotal) * 100, 2)
+                        $gb = [math]::Round($bitsJob.BytesTransferred / 1GB, 2)
+                        $totalGB = [math]::Round($bitsJob.BytesTotal / 1GB, 2)
+                        Write-Host "Download Progress: $percent% ($gb GB / $totalGB GB)" -ForegroundColor Cyan
+                    }
+                } while ($bitsJob.JobState -eq 'Transferring' -or $bitsJob.JobState -eq 'Connecting')
+
+                if ($bitsJob.JobState -eq 'Transferred') {
+                    Complete-BitsTransfer -BitsJob $bitsJob
+                    Write-Host "Download complete." -ForegroundColor Green
+                    $downloadSuccess = $true
+                }
+                elseif ($bitsJob.JobState -eq 'Error' -or $bitsJob.JobState -eq 'TransientError') {
+                    $downloadErrors += "BITS Error: $($bitsJob.ErrorInformation.ErrorDescription)"
+                    Remove-BitsTransfer -BitsJob $bitsJob -ErrorAction SilentlyContinue
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-Host "Download interrupted. Retrying in 10 seconds..." -ForegroundColor Yellow
+                        Start-Sleep -Seconds 10
+                    }
+                }
+                else {
+                    $downloadErrors += "BITS unexpected state: $($bitsJob.JobState)"
+                    Remove-BitsTransfer -BitsJob $bitsJob -ErrorAction SilentlyContinue
+                    $retryCount++
+                }
+            }
+            catch {
+                $downloadErrors += "BITS: $($_.Exception.Message)"
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-Host "BITS transfer failed. Retrying in 10 seconds..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 10
+                }
+            }
         }
-        catch {
-            Write-Error "Failed to download ISO: $_"
+
+        # Fallback to Invoke-WebRequest if BITS fails
+        if (-not $downloadSuccess -and $retryCount -ge $maxRetries) {
+            Write-Host "BITS transfer exhausted retries. Trying Invoke-WebRequest as fallback..." -ForegroundColor Yellow
+            $retryCount = 0
+            
+            while (-not $downloadSuccess -and $retryCount -lt $maxRetries) {
+                try {
+                    Write-Host "Attempting Invoke-WebRequest (Attempt $($retryCount + 1) of $maxRetries)..." -ForegroundColor Cyan
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+                    Invoke-WebRequest -Uri $isoMap[$chosen.Key] -OutFile $tempIsoPath -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop
+                    Write-Host "Download complete." -ForegroundColor Green
+                    $downloadSuccess = $true
+                }
+                catch {
+                    $downloadErrors += "WebRequest: $($_.Exception.Message)"
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-Host "Download failed. Retrying in 10 seconds..." -ForegroundColor Yellow
+                        Start-Sleep -Seconds 10
+                    }
+                }
+            }
+        }
+
+        if (-not $downloadSuccess) {
+            Write-Error "Failed to download ISO after $maxRetries attempts. Details:`n$($downloadErrors -join "`n")"
+            if (Test-Path $tempIsoPath) {
+                Remove-Item -Path $tempIsoPath -Force -ErrorAction SilentlyContinue
+            }
             return $null
         }
     }
