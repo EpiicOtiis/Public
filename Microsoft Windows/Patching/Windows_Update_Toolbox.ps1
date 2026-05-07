@@ -386,16 +386,43 @@ function Run-WUAManager {
 
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
+        $downloadSuccess = $false
+        $downloadErrors = @()
+
         try {
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop -MaximumRedirection 10
+            $downloadSuccess = $true
         }
         catch {
-            Write-Warning "Invoke-WebRequest failed, trying BITS transfer as a fallback..."
-            Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+            $downloadErrors += "Invoke-WebRequest: $($_.Exception.Message)"
+            Write-Warning "Invoke-WebRequest failed; attempting fallback methods..."
         }
 
-        if (-not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -eq 0) {
-            throw "Download completed but the file is missing or empty."
+        if (-not $downloadSuccess) {
+            try {
+                $webClient = New-Object System.Net.WebClient
+                $webClient.Proxy.Credentials = [Net.CredentialCache]::DefaultCredentials
+                $webClient.DownloadFile($downloadUrl, $outputPath)
+                $downloadSuccess = $true
+            }
+            catch {
+                $downloadErrors += "WebClient: $($_.Exception.Message)"
+                Write-Warning "WebClient download failed; trying BITS transfer..."
+            }
+        }
+
+        if (-not $downloadSuccess) {
+            try {
+                Start-BitsTransfer -Source $downloadUrl -Destination $outputPath -ErrorAction Stop
+                $downloadSuccess = $true
+            }
+            catch {
+                $downloadErrors += "BITS: $($_.Exception.Message)"
+            }
+        }
+
+        if (-not $downloadSuccess -or -not (Test-Path $outputPath) -or (Get-Item $outputPath).Length -eq 0) {
+            throw "Unable to download WUAManager. Details: $($downloadErrors -join ' | ')"
         }
 
         Write-Host "Downloaded WUAManager to $outputPath" -ForegroundColor Green
@@ -404,6 +431,9 @@ function Run-WUAManager {
     catch {
         Write-Error "Failed to download or launch WUAManager."
         Write-Error $_.Exception.Message
+        if ($downloadErrors) {
+            Write-Error "Download diagnostics: $($downloadErrors -join ' ; ')"
+        }
         Write-Error "If this continues, try downloading WUAManager manually from $downloadUrl."
     }
 }
