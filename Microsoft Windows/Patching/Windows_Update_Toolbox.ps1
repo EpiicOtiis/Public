@@ -383,9 +383,9 @@ function Start-DismScan {
                 $imageIndex = Get-WIMImageIndex -wimPath $sourcePath
 
                 $sourceArg = if ($sourcePath -like "*.wim") {
-                    "/Source:WIM:$sourcePath:$imageIndex"
+                    "/Source:WIM:" + $sourcePath + ":" + $imageIndex
                 } else {
-                    "/Source:ESD:$sourcePath:$imageIndex"
+                    "/Source:ESD:" + $sourcePath + ":" + $imageIndex
                 }
 
                 Write-Host "Using source file: $sourcePath (Index: $imageIndex)" -ForegroundColor Green
