@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-    Checks Microsoft Defender health and provides options for installation and onboarding.
+    Comprehensive script for Microsoft Defender Health, Updates, and Deployment.
 .DESCRIPTION
-    1. Audits WinDefend and Sense (MDE) services.
-    2. Identifies if the OS requires DISM or the Modern Unified Solution (MSI).
-    3. Facilitates installation and onboarding.
+    1. Audits service status and versioning (Engine, Signatures).
+    2. Triggers Defender signature updates.
+    3. Handles OS-specific installation (DISM vs MSI).
+    4. Facilitates MDE onboarding.
 #>
 
 function Test-IsAdmin {
@@ -17,14 +18,14 @@ if (-not (Test-IsAdmin)) {
     exit
 }
 
-# --- 1. Health Check ---
-Write-Host "--- Checking Defender Health ---" -ForegroundColor Cyan
+# --- 1. Health & Update Check ---
+Write-Host "--- Checking Defender Health & Versioning ---" -ForegroundColor Cyan
 
 $OSInfo = Get-CimInstance Win32_OperatingSystem
 $OSCaption = $OSInfo.Caption
-$OSVersion = [version]$OSInfo.Version
-Write-Host "Operating System: $OSCaption ($($OSInfo.Version))"
+Write-Host "Operating System: $OSCaption"
 
+# Service Check
 $Services = @("WinDefend", "Sense")
 foreach ($SvcName in $Services) {
     $Svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
@@ -36,20 +37,52 @@ foreach ($SvcName in $Services) {
     }
 }
 
-# --- 2. Installation Logic ---
+# Version & Update Check
+try {
+    $MpStatus = Get-MpComputerStatus -ErrorAction Stop
+    Write-Host "`n--- Defender Component Versions ---" -ForegroundColor Gray
+    Write-Host "Antivirus Signature Version: $($MpStatus.AntivirusSignatureVersion)"
+    Write-Host "Antivirus Last Updated:      $($MpStatus.AntivirusSignatureLastUpdated)"
+    Write-Host "Engine Version:              $($MpStatus.EngineVersion)"
+    Write-Host "Platform/Product Version:    $($MpStatus.AMProductVersion)"
+    
+    # Check if signatures are older than 24 hours
+    if ($MpStatus.AntivirusSignatureLastUpdated -lt (Get-Date).AddDays(-1)) {
+        Write-Host "[!] Warning: Defender signatures are more than 24 hours old." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "[!] Could not retrieve Defender status. The service may be disabled or uninstalled." -ForegroundColor Red
+}
+
+# --- 2. Update Management ---
+$DoUpdate = Read-Host "`nWould you like to check for and install Defender updates now? (Y/N)"
+if ($DoUpdate -eq 'Y') {
+    Write-Host "Checking for updates... (This may take a moment)" -ForegroundColor Cyan
+    try {
+        Update-MpSignature -ErrorAction Stop
+        Write-Host "Update check completed successfully." -ForegroundColor Green
+        
+        # Refresh status
+        $NewStatus = Get-MpComputerStatus
+        Write-Host "New Signature Version: $($NewStatus.AntivirusSignatureVersion)"
+    } catch {
+        Write-Host "Failed to update. Check internet connectivity or WSUS/Windows Update settings." -ForegroundColor Red
+    }
+}
+
+# --- 3. Installation Logic ---
 $SenseSvc = Get-Service -Name "Sense" -ErrorAction SilentlyContinue
 
 if (-not $SenseSvc) {
-    $InstallChoice = Read-Host "MDE (Sense) service is missing. Would you like to install it? (Y/N)"
+    $InstallChoice = Read-Host "`nMDE (Sense) service is missing. Would you like to install it? (Y/N)"
     if ($InstallChoice -eq 'Y') {
         
-        # Determine Installation Method
-        # Windows Server 2012 R2 (6.3) and 2016 (10.0.14393) require the MSI (Unified Solution)
+        $OSVersion = [version]$OSInfo.Version
         if ($OSCaption -match "2012 R2" -or ($OSCaption -match "2016" -and $OSVersion -lt [version]"10.0.17763")) {
             Write-Host "Detected Server 2012 R2/2016. Modern Unified Solution (MSI) is required." -ForegroundColor Yellow
             
             $MsiPath = Join-Path $env:TEMP "mdemodernunified.msi"
-            $DownloadUrl = Read-Host "Please enter the direct download URL for the MDE MSI (or leave blank to use local path)"
+            $DownloadUrl = Read-Host "Enter the direct download URL for the MDE MSI (or leave blank to use local path)"
             
             if ($DownloadUrl) {
                 Write-Host "Downloading MSI..."
@@ -61,40 +94,38 @@ if (-not $SenseSvc) {
             if (Test-Path $MsiPath) {
                 Write-Host "Installing MSI..."
                 Start-Process msiexec.exe -ArgumentList "/i `"$MsiPath`" /quiet /norestart" -Wait
-                Write-Host "Installation process complete."
+                Write-Host "Installation complete."
             }
         } 
         else {
-            # Windows 10/11 and Server 2019+ use DISM or are built-in
-            Write-Host "Detected modern OS. Attempting to enable via DISM/Features..." -ForegroundColor Yellow
+            Write-Host "Detected modern OS. Enabling via DISM..." -ForegroundColor Yellow
             try {
+                # This ensures the optional feature is present
                 Enable-WindowsOptionalFeature -Online -FeatureName "Windows-Defender-Default-Definitions" -LimitAccess -ErrorAction SilentlyContinue
-                Write-Host "Feature check complete."
+                Write-Host "Feature enablement complete."
             } catch {
-                Write-Host "Could not automatically enable via DISM. Please ensure 'Windows Defender' features are not removed from the image." -ForegroundColor Red
+                Write-Host "Automatic enablement failed. Ensure Defender has not been removed from this image." -ForegroundColor Red
             }
         }
     }
 }
 
-# --- 3. Onboarding Logic ---
-$OnboardChoice = Read-Host "Would you like to onboard this device to MDE? (Y/N)"
+# --- 4. Onboarding Logic ---
+$OnboardChoice = Read-Host "`nWould you like to onboard this device to MDE? (Y/N)"
 if ($OnboardChoice -eq 'Y') {
-    Write-Host "`n1. Automatic: Provide path to onboarding script"
+    Write-Host "1. Automatic: Provide path to onboarding script (.cmd or .ps1)"
     Write-Host "2. Manual: Paste the onboarding script content"
     $Method = Read-Host "Select option (1 or 2)"
 
     if ($Method -eq '1') {
-        $ScriptPath = Read-Host "Enter the full path to the onboarding script (.cmd or .ps1)"
+        $ScriptPath = Read-Host "Enter the full path to the onboarding script"
         if (Test-Path $ScriptPath) {
-            Write-Host "Executing onboarding script..."
+            Write-Host "Executing onboarding..."
             if ($ScriptPath -like "*.cmd") {
                 Start-Process cmd.exe -ArgumentList "/c `"$ScriptPath`"" -Wait
             } else {
                 & $ScriptPath
             }
-        } else {
-            Write-Host "Path not found." -ForegroundColor Red
         }
     } 
     elseif ($Method -eq '2') {
@@ -107,7 +138,6 @@ if ($OnboardChoice -eq 'Y') {
 
         $TempScript = Join-Path $env:TEMP "MDE_Onboard_Manual.cmd"
         $ScriptLines | Out-File -FilePath $TempScript -Encoding ASCII
-        Write-Host "Executing temporary onboarding script..."
         Start-Process cmd.exe -ArgumentList "/c `"$TempScript`"" -Wait
         Remove-Item $TempScript
     }
