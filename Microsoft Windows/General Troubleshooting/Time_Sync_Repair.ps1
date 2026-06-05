@@ -261,16 +261,15 @@ try {
     # Silent catch
 }
 
-Show-UserTimePrivilegeReport
-
 # Prompt for action
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "What would you like to do?" -ForegroundColor Yellow
 Write-Host "1. Change time sync settings" -ForegroundColor White
 Write-Host "2. Force sync with current settings" -ForegroundColor White
 Write-Host "3. Set time zone" -ForegroundColor White
-Write-Host "4. Exit" -ForegroundColor White
-$choice = Read-Host "Enter choice (1, 2, 3, or 4)"
+Write-Host "4. Review user time privileges and policy locks" -ForegroundColor White
+Write-Host "5. Exit" -ForegroundColor White
+$choice = Read-Host "Enter choice (1, 2, 3, 4, or 5)"
 
 if ($choice -eq '1') {
     # Change time sync settings
@@ -467,6 +466,8 @@ if ($choice -eq '1') {
     }
     
 } elseif ($choice -eq '4') {
+    Show-UserTimePrivilegeReport
+} elseif ($choice -eq '5') {
     # Exit
     Write-Host "`nExiting without making changes..." -ForegroundColor Yellow
     $restart = $false
