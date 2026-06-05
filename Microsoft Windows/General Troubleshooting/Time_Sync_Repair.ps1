@@ -50,11 +50,32 @@ function Check-GroupMembership ($GroupsWithAccess, $UserName) {
 
 function Get-TargetUserSid ($TargetUser) {
     if (-not $TargetUser) { return $null }
+
+    $SearchName = ($TargetUser -split '\\|@') | Select-Object -Last 1
+
     try {
         $NTAccount = New-Object System.Security.Principal.NTAccount($TargetUser)
-        return $NTAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        $UserSID = $NTAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
+        Write-Host "[+] SID resolved via standard lookup: $UserSID" -ForegroundColor Green
+        return $UserSID
     } catch {
-        Write-Warning "Could not resolve SID for $TargetUser locally. (If this is an AAD user not cached locally, this is normal)."
+        Write-Warning "Could not resolve SID for $TargetUser via standard lookup."
+        Write-Host "[!] Attempting to find SID in local user profiles for Azure AD / cached account..." -ForegroundColor Yellow
+
+        try {
+            $Profiles = Get-CimInstance Win32_UserProfile -ErrorAction Stop
+            $MatchedProfile = $Profiles | Where-Object { $_.LocalPath -match "\\$([regex]::Escape($SearchName))($|\\)" }
+            if ($MatchedProfile) {
+                $UserSID = $MatchedProfile[0].SID
+                Write-Host "[+] Found Azure AD SID in local profiles: $UserSID" -ForegroundColor Green
+                return $UserSID
+            }
+        } catch {
+            # Ignore profile lookup failures and continue returning $null
+        }
+
+        Write-Warning "Could not find a local profile or SID for $TargetUser."
+        Write-Warning "If this user has never logged into this machine, they will not have explicit direct rights here."
         return $null
     }
 }
@@ -103,7 +124,7 @@ function Show-UserTimePrivilegeReport {
     Write-Host "  User Time Privilege & Policy Review" -ForegroundColor Cyan
     Write-Host "========================================`n" -ForegroundColor Cyan
 
-    $TargetUser = Read-Host "Enter the user to analyze for time privileges (press Enter for current user)"
+    $TargetUser = Read-Host "Enter the user to analyze for time privileges (press Enter for current user). Use 'AzureAD\user@domain.com' for Azure AD users."
     if (-not $TargetUser) {
         $TargetUser = if ($env:USERDOMAIN) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
     }
