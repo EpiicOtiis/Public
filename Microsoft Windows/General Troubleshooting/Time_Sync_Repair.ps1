@@ -119,25 +119,60 @@ function Check-PolicyTimeLocks {
     }
 
     # --- Location Services checks (affects Auto-Time Zone) ---
-    Write-Host "`n--- Checking Location Services Policies (Crucial for Auto-Time Zone) ---" -ForegroundColor Cyan
+    Write-Host "`n--- Checking Location Services Policies ---" -ForegroundColor Cyan
 
-    $GlobalLocation = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -ErrorAction SilentlyContinue
-    if ($GlobalLocation -and $GlobalLocation.DisableLocation -eq 1) {
-        Write-Host "[-] GPO/Intune has completely DISABLED Windows Location Services." -ForegroundColor Red
-        Write-Host "    (Auto-Time Zone will fail to update without this)." -ForegroundColor Red
+    $AppLocationPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy"
+    $AppLocationName = "LetAppsAccessLocation"
+    $AppLocation = Get-ItemProperty -Path $AppLocationPath -Name $AppLocationName -ErrorAction SilentlyContinue
+
+    if ($null -eq $AppLocation -or $null -eq $AppLocation.$AppLocationName) {
+        Write-Host "[+] 'Let Apps Access Location' is NOT configured by policy (Key Missing). Setting is User Controlled." -ForegroundColor Green
     } else {
-        Write-Host "[+] Global Location Services are not blocked by policy." -ForegroundColor Green
+        $Value = $AppLocation.$AppLocationName
+        if ($Value -eq 0) {
+            Write-Host "[+] 'Let Apps Access Location' is enforced as: USER IN CONTROL (Value: 0)" -ForegroundColor Green
+        } elseif ($Value -eq 1) {
+            Write-Host "[+] 'Let Apps Access Location' is enforced as: FORCE ALLOW (Value: 1)" -ForegroundColor Green
+        } elseif ($Value -eq 2) {
+            Write-Host "[-] 'Let Apps Access Location' is enforced as: FORCE DENY (Value: 2). Auto-Time Zone will fail." -ForegroundColor Red
+        } else {
+            Write-Host "[?] 'Let Apps Access Location' is set to an unknown value ($Value)." -ForegroundColor Yellow
+        }
+    }
+}
+
+function Evaluate-AzureADUserPermission {
+    param (
+        [array]$GrantedGroups,
+        [string]$TargetUser
+    )
+    $HasAccess = $false
+    $StrippedUsername = $TargetUser -replace "^AzureAD\\",""
+
+    # Check 1: 'Users' group (BUILTIN\Users) grants access to all authenticated users
+    if ($GrantedGroups -match "Users") {
+        Write-Host "  [+] [$TargetUser] automatically has access because the 'BUILTIN\Users' group is granted this right." -ForegroundColor Green
+        $HasAccess = $true
     }
 
-    $AppLocation = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessLocation" -ErrorAction SilentlyContinue
-    if ($AppLocation -and $AppLocation.LetAppsAccessLocation -eq 2) {
-        Write-Host "[-] GPO/Intune explicitly DENIES apps access to location (Value: 2)." -ForegroundColor Red
-        Write-Host "    (This breaks the system's ability to auto-detect time zones)." -ForegroundColor Red
-    } elseif ($AppLocation -and $AppLocation.LetAppsAccessLocation -eq 1) {
-        Write-Host "[+] GPO/Intune explicitly ALLOWS apps access to location (Value: 1)." -ForegroundColor Green
-    } else {
-        Write-Host "[+] 'Let Apps Access Location' is not forced by policy (User controlled or default)." -ForegroundColor Green
+    # Check 2: 'Administrators' group
+    if (-not $HasAccess -and $GrantedGroups -match "Administrators") {
+        $Admins = Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue
+        $IsDirectAdmin = $Admins | Where-Object { $_.Name -match $StrippedUsername }
+        if ($IsDirectAdmin) {
+            Write-Host "  [+] [$TargetUser] has access because they are explicitly listed in the local 'Administrators' group." -ForegroundColor Green
+            $HasAccess = $true
+        } else {
+            Write-Host "  [!] The 'Administrators' group has access, but [$TargetUser] is not explicitly listed in it." -ForegroundColor Yellow
+            Write-Host "      (Note: If they receive Admin rights via an Intune Cloud Group SID, PowerShell cannot resolve that offline)." -ForegroundColor DarkYellow
+        }
     }
+
+    if (-not $HasAccess) {
+        Write-Host "  [-] [$TargetUser] does NOT appear to have access." -ForegroundColor Red
+    }
+
+    return $HasAccess
 }
 
 function Show-UserTimePrivilegeReport {
@@ -180,7 +215,19 @@ function Show-UserTimePrivilegeReport {
                 if ($GroupAccess) {
                     Write-Host "  [+] User is a member of a granted group." -ForegroundColor Green
                 } else {
-                    Write-Host "  [-] User does not appear to have rights to change this setting locally." -ForegroundColor Red
+                    # If the target is an AzureAD account, perform additional heuristics
+                    $AzureAccess = $false
+                    try {
+                        $AzureAccess = Evaluate-AzureADUserPermission -GrantedGroups $Resolved -TargetUser $TargetUser
+                    } catch {
+                        # Ignore evaluation errors
+                    }
+
+                    if ($AzureAccess) {
+                        Write-Host "  [+] Access granted via AzureAD/group evaluation." -ForegroundColor Green
+                    } else {
+                        Write-Host "  [-] User does not appear to have rights to change this setting locally." -ForegroundColor Red
+                    }
                 }
             }
         } else {
