@@ -16,6 +16,140 @@ if (-not $isAdmin) {
     exit
 }
 
+# Helper functions for time privilege and policy checks
+function Resolve-SidToName ($SidString) {
+    $SidString = $SidString.Trim()
+    $CleanSid = $SidString.TrimStart('*')
+    if ($CleanSid -match '^S-\d-\d+(-\d+)+$') {
+        try {
+            $SidObj = [System.Security.Principal.SecurityIdentifier]::new($CleanSid)
+            return $SidObj.Translate([System.Security.Principal.NTAccount]).Value
+        } catch {
+            return $SidString
+        }
+    }
+    return $SidString
+}
+
+function Check-GroupMembership ($GroupsWithAccess, $UserName) {
+    $HasAccess = $false
+    foreach ($Group in $GroupsWithAccess) {
+        $LocalGroupName = $Group -replace '.*\\', ''
+        try {
+            $Members = Get-LocalGroupMember -Group $LocalGroupName -ErrorAction Stop
+            if ($Members.Name -contains $UserName) {
+                Write-Host "  [+] User is a member of '$Group', granting them access." -ForegroundColor Green
+                $HasAccess = $true
+            }
+        } catch {
+            # Group might be a domain group or unresolvable locally; skip silently
+        }
+    }
+    return $HasAccess
+}
+
+function Get-TargetUserSid ($TargetUser) {
+    if (-not $TargetUser) { return $null }
+    try {
+        $NTAccount = New-Object System.Security.Principal.NTAccount($TargetUser)
+        return $NTAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        Write-Warning "Could not resolve SID for $TargetUser locally. (If this is an AAD user not cached locally, this is normal)."
+        return $null
+    }
+}
+
+function Get-LocalUserRightsLines {
+    $TempFile = "$env:TEMP\UserRights.txt"
+    secedit /export /areas USER_RIGHTS /cfg $TempFile | Out-Null
+    $SystemTimeLine = Get-Content $TempFile | Select-String -Pattern "^SeSystemtimePrivilege"
+    $TimeZoneLine = Get-Content $TempFile | Select-String -Pattern "^SeTimeZonePrivilege"
+    Remove-Item -Path $TempFile -Force
+    return @{ SystemTime = $SystemTimeLine; TimeZone = $TimeZoneLine }
+}
+
+function Check-PolicyTimeLocks {
+    Write-Host "`n--- Checking GPO / Intune UI & Auto-Sync Policies ---" -ForegroundColor Cyan
+
+    $TimeLocked = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\System" -Name "DisableDateTime" -ErrorAction SilentlyContinue
+    if ($TimeLocked.DisableDateTime -eq 1) {
+        Write-Host "[-] GPO/Intune is actively BLOCKING users from changing the Date/Time UI." -ForegroundColor Red
+    } else {
+        Write-Host "[+] No GPO/Intune UI blocks detected for Date/Time." -ForegroundColor Green
+    }
+
+    $ZoneLocked = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Control Panel\International" -Name "PreventUserFromChangingTimezone" -ErrorAction SilentlyContinue
+    if ($ZoneLocked.PreventUserFromChangingTimezone -eq 1) {
+        Write-Host "[-] GPO/Intune is actively BLOCKING users from changing the Time Zone UI." -ForegroundColor Red
+    } else {
+        Write-Host "[+] No GPO/Intune UI blocks detected for Time Zone." -ForegroundColor Green
+    }
+
+    $AutoTime = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Parameters" -Name "Type" -ErrorAction SilentlyContinue
+    if ($AutoTime.Type -eq "NTP" -or $AutoTime.Type -eq "NT5DS") {
+        Write-Host "[!] Time is set to synchronize automatically (NTP or Domain Sync)." -ForegroundColor Yellow
+    }
+
+    $AutoTimeZone = Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\tzautoupdate" -Name "Start" -ErrorAction SilentlyContinue
+    if ($AutoTimeZone.Start -eq 3) {
+        Write-Host "[!] Time Zone is set to update automatically via Location Services." -ForegroundColor Yellow
+    } elseif ($AutoTimeZone.Start -eq 4) {
+        Write-Host "[+] Time Zone auto-update is explicitly disabled." -ForegroundColor Green
+    }
+}
+
+function Show-UserTimePrivilegeReport {
+    Write-Host "`n========================================" -ForegroundColor Cyan
+    Write-Host "  User Time Privilege & Policy Review" -ForegroundColor Cyan
+    Write-Host "========================================`n" -ForegroundColor Cyan
+
+    $TargetUser = Read-Host "Enter the user to analyze for time privileges (press Enter for current user)"
+    if (-not $TargetUser) {
+        $TargetUser = if ($env:USERDOMAIN) { "$env:USERDOMAIN\$env:USERNAME" } else { $env:USERNAME }
+    }
+
+    Write-Host "Analyzing Time Privileges for: $TargetUser" -ForegroundColor Cyan
+    Write-Host "------------------------------------------------" -ForegroundColor Cyan
+
+    $UserSID = Get-TargetUserSid $TargetUser
+    if ($UserSID) {
+        Write-Host "Resolved SID: $UserSID" -ForegroundColor White
+    }
+
+    $rights = Get-LocalUserRightsLines
+    foreach ($priv in @(
+        @{ Label = "CHANGE SYSTEM TIME"; Line = $rights.SystemTime; PrivName = "SeSystemtimePrivilege" },
+        @{ Label = "CHANGE TIME ZONE"; Line = $rights.TimeZone; PrivName = "SeTimeZonePrivilege" }
+    )) {
+        Write-Host "`n[ $($priv.Label) ] ($($priv.PrivName))" -ForegroundColor Yellow
+        if ($priv.Line) {
+            $Entries = ($priv.Line.Line -split "=")[1].Split(",") | ForEach-Object { $_.Trim() }
+            $Resolved = $Entries | ForEach-Object { Resolve-SidToName $_ }
+
+            Write-Host "Granted to:" -ForegroundColor White
+            $Resolved | ForEach-Object { Write-Host "  - $_" -ForegroundColor White }
+
+            Write-Host "Evaluation:" -ForegroundColor White
+            $DirectAccess = ($UserSID -ne $null -and $Entries -contains "*$UserSID")
+            if ($DirectAccess) {
+                Write-Host "  [+] User is explicitly granted this privilege." -ForegroundColor Green
+            } else {
+                $GroupAccess = Check-GroupMembership -GroupsWithAccess $Resolved -UserName $TargetUser
+                if ($GroupAccess) {
+                    Write-Host "  [+] User is a member of a granted group." -ForegroundColor Green
+                } else {
+                    Write-Host "  [-] User does not appear to have rights to change this setting locally." -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "  [-] No accounts are granted this privilege in the local policy." -ForegroundColor Red
+        }
+    }
+
+    Check-PolicyTimeLocks
+    Write-Host ""
+}
+
 $restart = $true
 do {
     Write-Host "`n========================================" -ForegroundColor Cyan
@@ -126,6 +260,8 @@ try {
 } catch {
     # Silent catch
 }
+
+Show-UserTimePrivilegeReport
 
 # Prompt for action
 Write-Host "`n========================================" -ForegroundColor Cyan
