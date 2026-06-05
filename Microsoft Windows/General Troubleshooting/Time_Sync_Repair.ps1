@@ -117,6 +117,27 @@ function Check-PolicyTimeLocks {
     } elseif ($AutoTimeZone.Start -eq 4) {
         Write-Host "[+] Time Zone auto-update is explicitly disabled." -ForegroundColor Green
     }
+
+    # --- Location Services checks (affects Auto-Time Zone) ---
+    Write-Host "`n--- Checking Location Services Policies (Crucial for Auto-Time Zone) ---" -ForegroundColor Cyan
+
+    $GlobalLocation = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" -Name "DisableLocation" -ErrorAction SilentlyContinue
+    if ($GlobalLocation -and $GlobalLocation.DisableLocation -eq 1) {
+        Write-Host "[-] GPO/Intune has completely DISABLED Windows Location Services." -ForegroundColor Red
+        Write-Host "    (Auto-Time Zone will fail to update without this)." -ForegroundColor Red
+    } else {
+        Write-Host "[+] Global Location Services are not blocked by policy." -ForegroundColor Green
+    }
+
+    $AppLocation = Get-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" -Name "LetAppsAccessLocation" -ErrorAction SilentlyContinue
+    if ($AppLocation -and $AppLocation.LetAppsAccessLocation -eq 2) {
+        Write-Host "[-] GPO/Intune explicitly DENIES apps access to location (Value: 2)." -ForegroundColor Red
+        Write-Host "    (This breaks the system's ability to auto-detect time zones)." -ForegroundColor Red
+    } elseif ($AppLocation -and $AppLocation.LetAppsAccessLocation -eq 1) {
+        Write-Host "[+] GPO/Intune explicitly ALLOWS apps access to location (Value: 1)." -ForegroundColor Green
+    } else {
+        Write-Host "[+] 'Let Apps Access Location' is not forced by policy (User controlled or default)." -ForegroundColor Green
+    }
 }
 
 function Show-UserTimePrivilegeReport {
