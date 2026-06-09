@@ -74,6 +74,9 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 ### speedtest.ps1
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/speedtest.ps1 | iex
 
+### RDP_WKST.ps1
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/RDP_WKST.ps1 | iex
+
 # VMWare
 
 ## Tools
