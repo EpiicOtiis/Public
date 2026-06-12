@@ -4,7 +4,7 @@ My public-facing repository for PowerShell scripts.
 **Active Directory Scripts**
 
 - **Enable_AD_Recycle_Bin.ps1**: Enables the Active Directory Recycle Bin for the forest, verifies status and replication; requires ActiveDirectory module and admin rights.
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/Enable_AD_Recycle_Bin.ps1 | iex
+- irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/Enable_AD_Recycle_Bin.ps1 | iex
 
 - **AD_Replication_Troubleshooter_v5.ps1**: Gathers AD site/DC info, reports FSMO holders, runs repadmin/dcdiag diagnostics, and checks Directory Service event logs for replication issues.
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1 | iex
