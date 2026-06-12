@@ -1,5 +1,5 @@
 # Public
-My public-facing repository for PowerShell scripts. Below each script title is a one-line explanation (from the script's synopsis/description), followed by the original one-line command to fetch and run the script. All URLs are preserved unchanged.
+My public-facing repository for PowerShell scripts.
 
 **Active Directory Scripts**
 
