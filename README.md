@@ -49,11 +49,9 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Share_Report.ps1 | iex
 
 - **Folder-Permissions-Scanner.ps1**: Scans a folder tree for ACL entries and exports permission records to CSV (no owner column in this version).
-#### This version will not include folder owner in the output
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Folder-Permissions-Scanner.ps1 | iex
 
 - **Folder-Permissions-Scanner_V3.ps1**: Similar scanner that includes the folder owner in the output.
-#### This version will include folder owner in the output
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Windows_System_Info/Folder-Permissions-Scanner_V3.ps1 | iex
 
 - **Time_Sync_Repair.ps1**: Diagnostic and repair tool for system time, timezone, and related policies; checks privileges, GPOs/Intune settings and suggests fixes.
@@ -66,7 +64,6 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/Printer_Repair.ps1 | iex
 
 - **W10_ESU_Checker.ps1**: Checks the local system for active Extended Security Update (ESU) licenses and reports status.
-#### This script will check for the presence of an ESU license on a Windows 10 machine. 
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/Licensing/W10_ESU_Checker.ps1 | iex
 
 - **Windows_Update_Toolbox.ps1**: Comprehensive Windows Update and repair toolbox—reset/update components, run DISM/SFC, schedule reboots and other utilities.
@@ -78,6 +75,9 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 - **RDP_WKST.ps1**: Interactive utility to inspect and manage Remote Desktop settings on a workstation (enable/disable RDP, NLA, firewall rules, and group membership).
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/RDP_WKST.ps1 | iex
 
+**Microsoft Defender**
+- **WEDHealth.ps1**: Health and update script for Microsoft Defender—checks services, versions, triggers signature updates, and assists with onboarding.
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Microsoft%20Defender/WEDHealth.ps1 | iex
 
 # VMWare
 
@@ -87,16 +87,13 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/VMWare/VMWare_Tools_Updater.ps1 | iex
 
 
-**Microsoft 365**
+# Microsoft 365
 
 **Exchange**
 
 - **Direct_Send_Test.ps1**: Validates Microsoft 365 Direct Send by connecting to MX endpoint and attempting to send a test message (uses port 25, no auth).
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Exchange/Direct_Send_Test.ps1 | iex
 
-**Microsoft Defender**
-- **WEDHealth.ps1**: Health and update script for Microsoft Defender—checks services, versions, triggers signature updates, and assists with onboarding.
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Microsoft%20Defender/WEDHealth.ps1 | iex
 
 # Notes:
 Originally I used the traditional Invoke-Expression method of downloading and executing scripts. While there is no firm date on removal of this method, it is depreciated and Microsoft recommends alternative's such as Invoke-WebRequest like this:
