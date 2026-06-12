@@ -230,10 +230,10 @@ function Run-DFSRDiagChecks {
         foreach ($dc in $domainControllers) {
             $memberName = if ($dc.DNSHostName) { $dc.DNSHostName } else { $dc.Name }
             try {
-                Write-Host "`n--- dfsrdiag state /member:$memberName /verbose ---" -ForegroundColor Cyan
-                & dfsrdiag state /member:$memberName /verbose
+                Write-Host "`n--- dfsrdiag state /member:${memberName} /verbose ---" -ForegroundColor Cyan
+                & dfsrdiag state /member:${memberName} /verbose
             } catch {
-                Write-Host "Error running dfsrdiag state for $memberName: $_" -ForegroundColor Red
+                Write-Host "Error running dfsrdiag state for ${memberName}: ${_}" -ForegroundColor Red
             }
         }
     }
@@ -246,10 +246,10 @@ function Run-DFSRDiagChecks {
                     $sourceName = if ($source.DNSHostName) { $source.DNSHostName } else { $source.Name }
                     $destinationName = if ($destination.DNSHostName) { $destination.DNSHostName } else { $destination.Name }
                     try {
-                        Write-Host "`nChecking SYSVOL backlog from $sourceName to $destinationName..." -ForegroundColor Yellow
-                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:SYSVOL /smem:$sourceName /rmem:$destinationName /verbose
+                        Write-Host "`nChecking SYSVOL backlog from ${sourceName} to ${destinationName}..." -ForegroundColor Yellow
+                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:SYSVOL /smem:${sourceName} /rmem:${destinationName} /verbose
                     } catch {
-                        Write-Host "Error running dfsrdiag backlog from $sourceName to $destinationName: $_" -ForegroundColor Red
+                        Write-Host "Error running dfsrdiag backlog from ${sourceName} to ${destinationName}: ${_}" -ForegroundColor Red
                     }
                 }
             }
