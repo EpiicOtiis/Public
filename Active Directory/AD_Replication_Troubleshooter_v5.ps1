@@ -241,17 +241,44 @@ function Run-DFSRDiagChecks {
     if ($domainControllers.Count -gt 1) {
         $sysvolFolderNames = @('SYSVOL Share', 'SYSVOL')
         Write-Host "`n--- SYSVOL backlog checks for Domain System Volume ---" -ForegroundColor Cyan
+        $sysvolChecksPassed = 0
+        $sysvolChecksFailed = 0
+        
         foreach ($source in $domainControllers) {
             foreach ($destination in $domainControllers) {
                 if ($source.Name -ne $destination.Name) {
                     $sourceName = if ($source.DNSHostName) { $source.DNSHostName } else { $source.Name }
                     $destinationName = if ($destination.DNSHostName) { $destination.DNSHostName } else { $destination.Name }
+                    $pairCheckSucceeded = $false
+                    
                     foreach ($rfname in $sysvolFolderNames) {
-                        Write-Host "`nChecking SYSVOL backlog from ${sourceName} to ${destinationName} using replicated folder '${rfname}'..." -ForegroundColor Yellow
-                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:"${rfname}" /smem:${sourceName} /rmem:${destinationName} /verbose
+                        try {
+                            Write-Host "`nChecking SYSVOL backlog from ${sourceName} to ${destinationName} using replicated folder '${rfname}'..." -ForegroundColor Yellow
+                            & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:"${rfname}" /smem:${sourceName} /rmem:${destinationName} /verbose
+                            $pairCheckSucceeded = $true
+                            Write-Host "[SUCCESS] Backlog check succeeded for ${sourceName} -> ${destinationName} (${rfname})" -ForegroundColor Green
+                            break  # Exit loop if successful
+                        } catch {
+                            # Continue to next folder name
+                        }
+                    }
+                    
+                    if ($pairCheckSucceeded) {
+                        $sysvolChecksPassed++
+                    } else {
+                        $sysvolChecksFailed++
+                        Write-Host "[FAILED] Backlog check failed for ${sourceName} -> ${destinationName} (tried both SYSVOL and SYSVOL Share)" -ForegroundColor Red
                     }
                 }
             }
+        }
+        
+        Write-Host "`n=== SYSVOL Backlog Check Summary ===" -ForegroundColor Cyan
+        Write-Host "Passed: ${sysvolChecksPassed} | Failed: ${sysvolChecksFailed}" -ForegroundColor Yellow
+        if ($sysvolChecksFailed -eq 0) {
+            Write-Host "[SUCCESS] All SYSVOL backlog checks passed!" -ForegroundColor Green
+        } else {
+            Write-Host "[WARNING] Some SYSVOL backlog checks failed. Review errors above." -ForegroundColor Yellow
         }
     } else {
         Write-Host "Not enough domain controllers found to perform SYSVOL backlog checks." -ForegroundColor Yellow
