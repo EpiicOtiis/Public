@@ -230,10 +230,10 @@ function Run-DFSRDiagChecks {
         foreach ($dc in $domainControllers) {
             $memberName = if ($dc.DNSHostName) { $dc.DNSHostName } else { $dc.Name }
             try {
-                Write-Host "`n--- dfsrdiag state /member:${memberName} /verbose ---" -ForegroundColor Cyan
-                & dfsrdiag state /member:${memberName} /verbose
+                Write-Host "`n--- dfsrdiag dumpmachinecfg /member:${memberName} ---" -ForegroundColor Cyan
+                & dfsrdiag dumpmachinecfg /member:${memberName}
             } catch {
-                Write-Host "Error running dfsrdiag state for ${memberName}: ${_}" -ForegroundColor Red
+                Write-Host "Error running dfsrdiag dumpmachinecfg for ${memberName}: ${_}" -ForegroundColor Red
             }
         }
     }
