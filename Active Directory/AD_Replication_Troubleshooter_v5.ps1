@@ -239,17 +239,16 @@ function Run-DFSRDiagChecks {
     }
 
     if ($domainControllers.Count -gt 1) {
+        $sysvolFolderNames = @('SYSVOL Share', 'SYSVOL')
         Write-Host "`n--- SYSVOL backlog checks for Domain System Volume ---" -ForegroundColor Cyan
         foreach ($source in $domainControllers) {
             foreach ($destination in $domainControllers) {
                 if ($source.Name -ne $destination.Name) {
                     $sourceName = if ($source.DNSHostName) { $source.DNSHostName } else { $source.Name }
                     $destinationName = if ($destination.DNSHostName) { $destination.DNSHostName } else { $destination.Name }
-                    try {
-                        Write-Host "`nChecking SYSVOL backlog from ${sourceName} to ${destinationName}..." -ForegroundColor Yellow
-                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:SYSVOL /smem:${sourceName} /rmem:${destinationName} /verbose
-                    } catch {
-                        Write-Host "Error running dfsrdiag backlog from ${sourceName} to ${destinationName}: ${_}" -ForegroundColor Red
+                    foreach ($rfname in $sysvolFolderNames) {
+                        Write-Host "`nChecking SYSVOL backlog from ${sourceName} to ${destinationName} using replicated folder '${rfname}'..." -ForegroundColor Yellow
+                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:"${rfname}" /smem:${sourceName} /rmem:${destinationName} /verbose
                     }
                 }
             }
@@ -272,39 +271,36 @@ function Run-DCDiagTests {
 function Check-EventViewerErrors {
     Write-Host "`n=== Event Viewer Replication Errors (Last 24 Hours) ===" -ForegroundColor Green
     $startTime = (Get-Date).AddHours(-24)
-    try {
-        $directoryEventIDs = 1000, 1004, 1006, 1311, 1388, 1865, 1925, 1926, 1988, 2103
-        $dfsrEventIDs = 4000, 4002, 4004, 4012, 4013, 4102, 4112, 5002, 5004, 5008, 5014
 
-        $directoryEvents = Get-WinEvent -FilterHashtable @{
-            LogName   = 'Directory Service'
-            StartTime = $startTime
-            Level     = 2, 3 # 2 for Error, 3 for Warning
-            Id        = $directoryEventIDs
-        } -ErrorAction Stop
+    $directoryEventIDs = 1000, 1004, 1006, 1311, 1388, 1865, 1925, 1926, 1988, 2103
+    $dfsrEventIDs = 4000, 4002, 4004, 4012, 4013, 4102, 4112, 5002, 5004, 5008, 5014
 
-        $dfsrEvents = Get-WinEvent -FilterHashtable @{
-            LogName   = 'DFS Replication'
-            StartTime = $startTime
-            Level     = 2, 3
-            Id        = $dfsrEventIDs
-        } -ErrorAction Stop
+    $directoryEvents = Get-WinEvent -FilterHashtable @{
+        LogName   = 'Directory Service'
+        StartTime = $startTime
+        Level     = 2, 3 # 2 for Error, 3 for Warning
+        Id        = $directoryEventIDs
+    } -ErrorAction SilentlyContinue
 
-        if ($directoryEvents -or $dfsrEvents) {
-            Write-Host "Found replication-related errors in Event Viewer:" -ForegroundColor Yellow
-            if ($directoryEvents) {
-                Write-Host "`nDirectory Service Log:" -ForegroundColor Cyan
-                $directoryEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
-            }
-            if ($dfsrEvents) {
-                Write-Host "`nDFS Replication Log:" -ForegroundColor Cyan
-                $dfsrEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
-            }
-        } else {
-            Write-Host "No replication-related or SYSVOL-related errors found in Event Viewer in the last 24 hours." -ForegroundColor Green
+    $dfsrEvents = Get-WinEvent -FilterHashtable @{
+        LogName   = 'DFS Replication'
+        StartTime = $startTime
+        Level     = 2, 3
+        Id        = $dfsrEventIDs
+    } -ErrorAction SilentlyContinue
+
+    if (($directoryEvents -and $directoryEvents.Count -gt 0) -or ($dfsrEvents -and $dfsrEvents.Count -gt 0)) {
+        Write-Host "Found replication-related errors in Event Viewer:" -ForegroundColor Yellow
+        if ($directoryEvents -and $directoryEvents.Count -gt 0) {
+            Write-Host "`nDirectory Service Log:" -ForegroundColor Cyan
+            $directoryEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
         }
-    } catch {
-        Write-Host "Error retrieving Event Viewer logs: $_" -ForegroundColor Red
+        if ($dfsrEvents -and $dfsrEvents.Count -gt 0) {
+            Write-Host "`nDFS Replication Log:" -ForegroundColor Cyan
+            $dfsrEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
+        }
+    } else {
+        Write-Host "No replication-related or SYSVOL-related errors found in Event Viewer in the last 24 hours." -ForegroundColor Green
     }
 }
 
