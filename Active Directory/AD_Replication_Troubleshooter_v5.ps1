@@ -20,13 +20,14 @@ Replication Diagnostics:
 # Runs repadmin /replsummary to show a summary of replication status.
 # Runs repadmin /queue to display pending replication tasks.
 # Runs repadmin /syncall /e /d to check synchronization status across all domain controllers.
+# Runs DFSR diagnostic checks including pollad, replicationstate, state, and SYSVOL backlog.
 
 DCDiag Tests:
 # Executes dcdiag /test:Replication to specifically test replication.
 # Runs a general dcdiag /v for broader diagnostic information.
 
 Event Viewer Check:
-# Queries the "Directory Service" log for errors and warnings related to replication from the last 24 hours.
+# Queries the "Directory Service" and "DFS Replication" logs for errors and warnings from the last 24 hours.
 
 Error Handling:
 # Includes try-catch blocks to handle potential errors gracefully and provide feedback.
@@ -160,6 +161,109 @@ function Run-RepadminCommands {
     try { repadmin /syncall /e /d } catch { Write-Host "Error running repadmin /syncall: $_" -ForegroundColor Red }
 }
 
+# --- DFSR Diagnostic Checks ---
+function Ensure-DFSRDiagTool {
+    Write-Host "`n=== DFSR Diagnostic Tool Check ===" -ForegroundColor Green
+
+    $dfsrPath = Get-Command dfsrdiag.exe -ErrorAction SilentlyContinue
+    if ($dfsrPath) {
+        Write-Host "dfsrdiag is already available." -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host "dfsrdiag is not available. Attempting installation..." -ForegroundColor Yellow
+    $installSucceeded = $false
+
+    if (Get-Command Install-WindowsFeature -ErrorAction SilentlyContinue) {
+        try {
+            Install-WindowsFeature RSAT-DFS-Mgmt-Con -IncludeAllSubFeature -ErrorAction Stop | Out-Null
+            $installSucceeded = $true
+        } catch {
+            Write-Host "Install-WindowsFeature failed: $_" -ForegroundColor Red
+        }
+    } elseif (Get-Command Add-WindowsCapability -ErrorAction SilentlyContinue) {
+        try {
+            Add-WindowsCapability -Online -Name "Rsat.Dfs.Tools~~~~0.0.1.0" -ErrorAction Stop | Out-Null
+            $installSucceeded = $true
+        } catch {
+            Write-Host "Add-WindowsCapability failed: $_" -ForegroundColor Red
+        }
+    } elseif (Get-Command Enable-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
+        try {
+            Enable-WindowsOptionalFeature -Online -FeatureName "RSATDFS-Mgmt-Con" -NoRestart -All -ErrorAction Stop | Out-Null
+            $installSucceeded = $true
+        } catch {
+            Write-Host "Enable-WindowsOptionalFeature failed: $_" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "No supported installation cmdlet found. Please install DFSR tools manually." -ForegroundColor Red
+        return $false
+    }
+
+    if ($installSucceeded -and (Get-Command dfsrdiag.exe -ErrorAction SilentlyContinue)) {
+        Write-Host "dfsrdiag installed successfully." -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host "dfsrdiag installation completed but the command is still unavailable." -ForegroundColor Red
+    return $false
+}
+
+function Run-DFSRDiagChecks {
+    if (-not (Ensure-DFSRDiagTool)) {
+        Write-Host "Skipping DFSR diagnostics because dfsrdiag is unavailable." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "`n=== DFSR Diagnostic Checks ===" -ForegroundColor Green
+
+    try {
+        Write-Host "`n--- dfsrdiag pollad /verbose ---" -ForegroundColor Cyan
+        & dfsrdiag pollad /verbose
+    } catch {
+        Write-Host "Error running dfsrdiag pollad: $_" -ForegroundColor Red
+    }
+
+    try {
+        Write-Host "`n--- dfsrdiag replicationstate /verbose ---" -ForegroundColor Cyan
+        & dfsrdiag replicationstate /verbose
+    } catch {
+        Write-Host "Error running dfsrdiag replicationstate: $_" -ForegroundColor Red
+    }
+
+    if ($domainControllers.Count -gt 0) {
+        foreach ($dc in $domainControllers) {
+            $memberName = if ($dc.DNSHostName) { $dc.DNSHostName } else { $dc.Name }
+            try {
+                Write-Host "`n--- dfsrdiag state /member:$memberName /verbose ---" -ForegroundColor Cyan
+                & dfsrdiag state /member:$memberName /verbose
+            } catch {
+                Write-Host "Error running dfsrdiag state for $memberName: $_" -ForegroundColor Red
+            }
+        }
+    }
+
+    if ($domainControllers.Count -gt 1) {
+        Write-Host "`n--- SYSVOL backlog checks for Domain System Volume ---" -ForegroundColor Cyan
+        foreach ($source in $domainControllers) {
+            foreach ($destination in $domainControllers) {
+                if ($source.Name -ne $destination.Name) {
+                    $sourceName = if ($source.DNSHostName) { $source.DNSHostName } else { $source.Name }
+                    $destinationName = if ($destination.DNSHostName) { $destination.DNSHostName } else { $destination.Name }
+                    try {
+                        Write-Host "`nChecking SYSVOL backlog from $sourceName to $destinationName..." -ForegroundColor Yellow
+                        & dfsrdiag backlog /rgname:"Domain System Volume" /rfname:SYSVOL /smem:$sourceName /rmem:$destinationName /verbose
+                    } catch {
+                        Write-Host "Error running dfsrdiag backlog from $sourceName to $destinationName: $_" -ForegroundColor Red
+                    }
+                }
+            }
+        }
+    } else {
+        Write-Host "Not enough domain controllers found to perform SYSVOL backlog checks." -ForegroundColor Yellow
+    }
+}
+
 # --- DCDiag Tests ---
 function Run-DCDiagTests {
     Write-Host "`n=== DCDiag Replication Tests ===" -ForegroundColor Green
@@ -174,20 +278,35 @@ function Check-EventViewerErrors {
     Write-Host "`n=== Event Viewer Replication Errors (Last 24 Hours) ===" -ForegroundColor Green
     $startTime = (Get-Date).AddHours(-24)
     try {
-        $replicationEventIDs = 1000, 1004, 1006, 1311, 1388, 1865, 1925, 1926, 1988, 2103
-        
-        $events = Get-WinEvent -FilterHashtable @{
+        $directoryEventIDs = 1000, 1004, 1006, 1311, 1388, 1865, 1925, 1926, 1988, 2103
+        $dfsrEventIDs = 4000, 4002, 4004, 4012, 4013, 4102, 4112, 5002, 5004, 5008, 5014
+
+        $directoryEvents = Get-WinEvent -FilterHashtable @{
             LogName   = 'Directory Service'
             StartTime = $startTime
             Level     = 2, 3 # 2 for Error, 3 for Warning
-            Id        = $replicationEventIDs
+            Id        = $directoryEventIDs
         } -ErrorAction Stop
 
-        if ($events) {
+        $dfsrEvents = Get-WinEvent -FilterHashtable @{
+            LogName   = 'DFS Replication'
+            StartTime = $startTime
+            Level     = 2, 3
+            Id        = $dfsrEventIDs
+        } -ErrorAction Stop
+
+        if ($directoryEvents -or $dfsrEvents) {
             Write-Host "Found replication-related errors in Event Viewer:" -ForegroundColor Yellow
-            $events | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
+            if ($directoryEvents) {
+                Write-Host "`nDirectory Service Log:" -ForegroundColor Cyan
+                $directoryEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
+            }
+            if ($dfsrEvents) {
+                Write-Host "`nDFS Replication Log:" -ForegroundColor Cyan
+                $dfsrEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
+            }
         } else {
-            Write-Host "No replication-related errors found in Event Viewer in the last 24 hours." -ForegroundColor Green
+            Write-Host "No replication-related or SYSVOL-related errors found in Event Viewer in the last 24 hours." -ForegroundColor Green
         }
     } catch {
         Write-Host "Error retrieving Event Viewer logs: $_" -ForegroundColor Red
@@ -202,6 +321,7 @@ if ($domainControllers) {
     
     # Run the rest of the diagnostics
     Run-RepadminCommands
+    Run-DFSRDiagChecks
     Run-DCDiagTests
     Check-EventViewerErrors
 } else {
