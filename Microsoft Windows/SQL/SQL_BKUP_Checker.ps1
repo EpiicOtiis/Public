@@ -92,6 +92,9 @@ function Invoke-ScriptAsSystem {
         }
     }
 
+    Write-Host "SYSTEM relaunch output file: $outputFile"
+    Write-Host "SYSTEM relaunch error file: $errorFile"
+
     if (Test-Path $outputFile) {
         Write-Host "--- SYSTEM OUTPUT ($outputFile) ---"
         Get-Content $outputFile | ForEach-Object { Write-Host $_ }
@@ -396,6 +399,7 @@ Write-Host "Search window: $DaysBack day(s) (since $startTime)"
 
 $osInfo = Get-OperatingSystemInfo
 Write-Host "Operating System: $($osInfo.Caption) $($osInfo.Architecture) (Build $($osInfo.BuildNumber))"
+Write-Host "Current account: $(whoami)"
 
 $providerName = Get-SqlEventProviderName
 if ($providerName) {
@@ -406,9 +410,18 @@ if ($providerName) {
 
 Write-Section 'Event Log Analysis'
 $events = Get-SqlBackupEvents -StartTime $startTime
+$topEventLogs = @()
 if ($events.Count -gt 0) {
     $events | Sort-Object TimeCreated -Descending | Select-Object TimeCreated, ProviderName, Id, Level, DatabaseName, Target, Message | Format-Table -Wrap -AutoSize
     if ($ShowGrid) { $events | Sort-Object TimeCreated -Descending | Out-GridView -Title 'SQL Backup Events' }
+
+    $topEventLogs = $events |
+        Group-Object Id |
+        Sort-Object Count -Descending |
+        Select-Object -First 3 -Property @{Name='EventId';Expression={[int]$_.Name}}, Count, @{Name='SampleMessage';Expression={
+            $text = ($_.Group | Select-Object -First 1).Message -replace '\s+', ' '
+            if ($text.Length -gt 120) { $text.Substring(0,120) + '...' } else { $text }
+        }}
 } else {
     Write-Host 'No SQL backup-related event log entries were found in the selected time window.' -ForegroundColor Yellow
 }
@@ -475,6 +488,10 @@ if ($defaultBackupDir -and $defaultBackupDir.Rows.Count -gt 0 -and $defaultBacku
 
 Write-Section 'Summary'
 if ($events.Count -gt 0) { Write-Host "Found $($events.Count) matching SQL backup-related event(s)." }
+if ($topEventLogs.Count -gt 0) {
+    Write-Host 'Most Frequent SQL Event IDs:' -ForegroundColor Cyan
+    $topEventLogs | Format-Table EventId, Count, SampleMessage -AutoSize
+}
 if ($healthFindings -and $healthFindings.Count -gt 0) { Write-Host "Found $($healthFindings.Count) backup health issue(s)." -ForegroundColor Yellow }
 if ($jobMatches -and $jobMatches.Rows.Count -gt 0) { Write-Host "Found $($jobMatches.Rows.Count) SQL Agent job step(s) that reference backup or restore activity." }
 if ($pathResults -and $pathResults.Count -gt 0) { Write-Host "Discovered $($pathResults.Count) unique backup path(s) from backup history." }
