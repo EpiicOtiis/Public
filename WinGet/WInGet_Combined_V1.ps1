@@ -1,10 +1,15 @@
-<# (WinGet_Combined_V1) :: (Revision # 1)/Aaron Pleus, (10/09/2025)
-
-   This script, like all scripts developed by Aaron Pleus, unless otherwise explicitly stated, is the copyrighted property of Aaron Pleus/Integris IT.;
-   it may not be shared, sold, or distributed whole or in part, even with modifications applied, for any reason. this includes on reddit, on discord, or as part of other RMM tools.
-
-   The moment you edit this script it becomes your own risk and Aaron Pleus/Integris IT will not provide assistance with it.#>
-
+# Synopsis:
+#   A unified Winget helper script that can install, update, list, or uninstall
+#   applications via interactive prompts or command-line arguments.
+#
+#   Command-line usage:
+#     .\WinGet_Combined_V1.ps1 /updateall
+#     .\WinGet_Combined_V1.ps1 /uninstall <PackageIdOrName>
+#     .\WinGet_Combined_V1.ps1 /list
+#     .\WinGet_Combined_V1.ps1 /help
+#
+#   If no arguments are provided, the script starts in interactive mode.
+#
 # WebClient Configuration
 $dc = New-Object net.webclient
 $dc.UseDefaultCredentials = $true
@@ -63,6 +68,89 @@ if ($ResolveWingetPath) {
 # Get the directory of winget.exe
 $WingetExeDirectory = Split-Path -Path $WingetPath -Parent
 Set-Location -Path $WingetExeDirectory
+
+function Show-Usage {
+    Write-Host "Usage:" -ForegroundColor Yellow
+    Write-Host "  .\WinGet_Combined_V1.ps1 /updateall" -ForegroundColor White
+    Write-Host "  .\WinGet_Combined_V1.ps1 /uninstall <PackageIdOrName>" -ForegroundColor White
+    Write-Host "  .\WinGet_Combined_V1.ps1 /list" -ForegroundColor White
+    Write-Host "  .\WinGet_Combined_V1.ps1" -ForegroundColor White
+    Write-Host "" -ForegroundColor White
+    Write-Host "If no arguments are provided, the script runs in interactive mode." -ForegroundColor DarkCyan
+}
+
+function List-InstalledPackages {
+    Write-Host "`n--- Installed Winget Packages ---" -ForegroundColor Cyan
+    try {
+        $installedPackages = & $WingetPath list --source winget --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream | Where-Object { $_ -and $_ -notmatch '^\s*[-\\/|─]' }
+        if ($installedPackages) {
+            $installedPackages | ForEach-Object { Write-Host $_ }
+        } else {
+            Write-Host "No installed packages were returned by Winget." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Failed to list installed packages. Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Update-AllPackages {
+    Write-Host "`n--- Updating All Available Winget Packages ---" -ForegroundColor Cyan
+    try {
+        & $WingetPath upgrade --all -e --accept-source-agreements -h --disable-interactivity
+        Write-Host "Winget upgrade --all completed." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to update all packages. Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Uninstall-Package {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$PackageId
+    )
+
+    Write-Host "`n--- Uninstalling $PackageId ---" -ForegroundColor Cyan
+    try {
+        & $WingetPath uninstall $PackageId -e --accept-source-agreements -h --disable-interactivity
+        Write-Host "Uninstall command initiated for '$PackageId'." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to uninstall '$PackageId'. Error: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# Command-line argument handling
+if ($args.Count -gt 0) {
+    $command = $args[0].TrimStart('/','-').ToLower()
+    switch ($command) {
+        'updateall' {
+            Update-AllPackages
+            exit 0
+        }
+        'uninstall' {
+            if ($args.Count -lt 2 -or [string]::IsNullOrWhiteSpace($args[1])) {
+                Write-Host "Missing package ID or name for uninstall." -ForegroundColor Red
+                Show-Usage
+                exit 1
+            }
+            $packageId = $args[1..($args.Count - 1)] -join ' '
+            Uninstall-Package -PackageId $packageId
+            exit 0
+        }
+        'list' {
+            List-InstalledPackages
+            exit 0
+        }
+        'help' | '?' {
+            Show-Usage
+            exit 0
+        }
+        Default {
+            Write-Host "Unknown argument: $($args[0])" -ForegroundColor Red
+            Show-Usage
+            exit 1
+        }
+    }
+}
 
 # --- Main Loop for Actions ---
 $continueActions = $true

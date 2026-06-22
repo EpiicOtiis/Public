@@ -54,9 +54,18 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Zoom/Rem
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%20C%2B%2B%20Redistributables/Remove-VisualC.ps1 | iex
 ```
 
-- **WinGet_Combined_V1.ps1**: Wrapper/utility around `winget` to install, update, or uninstall packages and ensure `winget` is present; offers interactive menu.
+- **WinGet_Combined_V1.ps1**: Wrapper/utility around `winget` to install, update, or uninstall packages and ensure `winget` is present; supports both interactive menu mode and command-line arguments.
+
+  Command-line examples:
+  ```powershell
+  .\WinGet_Combined_V1.ps1 /updateall
+  .\WinGet_Combined_V1.ps1 /uninstall <PackageIdOrName>
+  .\WinGet_Combined_V1.ps1 /list
+  .\WinGet_Combined_V1.ps1 /help
+  ```
+
 ```powershell
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1 | iex
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WinGet_Combined_V1.ps1 | iex
 ```
 
 
