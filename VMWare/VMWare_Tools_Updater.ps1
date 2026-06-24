@@ -9,6 +9,20 @@
 # This is crucial for connecting to modern web servers that have deprecated older protocols.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
+function Exit-Script {
+    param (
+        [string]$Reason
+    )
+
+    if ($Reason) {
+        Write-Host "`n$Reason"
+    }
+
+    Write-Host "Press Enter to exit the script."
+    Read-Host
+    exit
+}
+
 # --- 1. Get the installed version of VMware Tools ---
 function Get-InstalledVMwareToolsVersion {
     try {
@@ -85,8 +99,7 @@ function Get-LatestVMwareToolsInfo {
 $installedVersion = Get-InstalledVMwareToolsVersion
 
 if (-not $installedVersion) {
-    Write-Host "VMware Tools is not installed or could not be detected."
-    exit
+    Exit-Script -Reason "VMware Tools is not installed or could not be detected."
 }
 
 Write-Host "Installed VMware Tools Version: $installedVersion"
@@ -94,14 +107,13 @@ Write-Host "Installed VMware Tools Version: $installedVersion"
 $majorInstalledVersion = ($installedVersion -split '\.')[0]
 
 if ($majorInstalledVersion -ne "12" -and $majorInstalledVersion -ne "13") {
-    Write-Host "This script only supports updating versions 12.x.x and 13.x.x of VMware Tools."
-    exit
+    Exit-Script -Reason "This script only supports updating versions 12.x.x and 13.x.x of VMware Tools."
 }
 
 $latestToolsInfo = Get-LatestVMwareToolsInfo -MajorVersion $majorInstalledVersion
 
 if (-not $latestToolsInfo) {
-    exit
+    Exit-Script -Reason "Unable to determine the latest VMware Tools version from VMware's website."
 }
 
 $latestToolsUrl = $latestToolsInfo.Url
@@ -111,8 +123,7 @@ Write-Host "Latest available version for major version $majorInstalledVersion is
 
 # Using .Trim() to avoid any issues with trailing spaces when comparing versions
 if ([version]$installedVersion.Trim() -ge [version]$latestVersion.Trim()) {
-    Write-Host "You are already running the latest or a newer version of VMware Tools for this major release."
-    exit
+    Exit-Script -Reason "You are already running the latest or a newer version of VMware Tools for this major release."
 }
 
 # --- 3. Prompt for update ---
@@ -123,8 +134,7 @@ while ($updateConfirmation -ne 'y' -and $updateConfirmation -ne 'n') {
 }
 
 if ($updateConfirmation -ne 'y') {
-    Write-Host "Update cancelled by the user."
-    exit
+    Exit-Script -Reason "Update cancelled by the user."
 }
 
 # --- 4. Download the installer ---
@@ -138,8 +148,7 @@ try {
 catch {
     # *** IMPROVED ERROR REPORTING ***
     # This will now display the specific reason for the download failure.
-    Write-Warning "Failed to download the VMware Tools installer. Error: $($_.Exception.Message)"
-    exit
+    Exit-Script -Reason "Failed to download the VMware Tools installer. Error: $($_.Exception.Message)"
 }
 
 # --- 5. Prompt for installation type ---
@@ -160,8 +169,7 @@ try {
     Write-Host "VMware Tools installation process finished."
 }
 catch {
-    Write-Warning "An error occurred during the installation. Error: $($_.Exception.Message)"
-    exit
+    Exit-Script -Reason "An error occurred during the installation. Error: $($_.Exception.Message)"
 }
 
 # --- 6. Prompt to schedule a reboot ---
