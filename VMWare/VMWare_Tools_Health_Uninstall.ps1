@@ -41,8 +41,47 @@ $VMwareRegKey = Get-ChildItem $RegPath -ErrorAction SilentlyContinue |
                 Where-Object { $_.DisplayName -match "VMware Tools" }
 
 $VMwareServices = @("VMTools", "VGAuthService")
+$LogPath = "C:\ProgramData\VMwareToolsUninstall.log"
 
 # --- FUNCTIONS ---
+
+function Write-UninstallLog {
+    param (
+        [string]$Message,
+        [ValidateSet('INFO', 'WARNING', 'ERROR', 'SUCCESS')]
+        [string]$Level = 'INFO'
+    )
+
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $logEntry = "[$timestamp] [$Level] $Message"
+    
+    try {
+        Add-Content -Path $LogPath -Value $logEntry -ErrorAction Stop
+    } catch {
+        Write-Host $logEntry
+    }
+}
+
+function Test-VMwareToolsInstalled {
+    $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+    $tools = Get-ChildItem $regPath -ErrorAction SilentlyContinue | 
+        Get-ItemProperty -ErrorAction SilentlyContinue | 
+        Where-Object { $_.DisplayName -match "VMware Tools" }
+    
+    return $null -ne $tools
+}
+
+function Verify-UninstallSuccess {
+    Start-Sleep -Seconds 5
+    
+    if (Test-VMwareToolsInstalled) {
+        Write-UninstallLog "VMware Tools is still installed after uninstall attempt." -Level 'WARNING'
+        return $false
+    } else {
+        Write-UninstallLog "VMware Tools successfully uninstalled." -Level 'SUCCESS'
+        return $true
+    }
+}
 
 function Get-VMwareToolsHealth {
     Write-Host "--- VMware Tools Health Report ---" -ForegroundColor Cyan
@@ -79,23 +118,35 @@ function Invoke-StandardUninstall {
 
     if (-not $VMwareRegKey) {
         Write-Host "VMware Tools does not appear to be installed via MSI. Nothing to gracefully uninstall." -ForegroundColor Yellow
+        Write-UninstallLog "Standard uninstall called but VMware Tools not found in registry." -Level 'INFO'
         return
     }
 
     $Guid = $VMwareRegKey.PSChildName
     Write-Host "Initiating standard silent uninstallation for VMware Tools (GUID: $Guid)..." -ForegroundColor Cyan
+    Write-UninstallLog "Starting standard uninstall with GUID: $Guid" -Level 'INFO'
     
     $process = Start-Process -FilePath "msiexec.exe" -ArgumentList "/x $Guid /qn /norestart" -Wait -PassThru
     
     if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
         Write-Host "Standard uninstallation completed successfully. A reboot is required to finish removing drivers." -ForegroundColor Green
+        Write-UninstallLog "MSI uninstall process exited with code $($process.ExitCode) (success)." -Level 'INFO'
     } else {
         Write-Host "Uninstallation exited with code $($process.ExitCode). You may need to use -ForceCleanup." -ForegroundColor Red
+        Write-UninstallLog "MSI uninstall process exited with code $($process.ExitCode) (failure)." -Level 'ERROR'
     }
 
     if ($RebootAfter) {
         Write-Host "Rebooting in 60 seconds after uninstall..." -ForegroundColor Cyan
+        $isInstalled = Test-VMwareToolsInstalled
+        if ($isInstalled) {
+            Write-UninstallLog "Uninstall initiated. VMware Tools still present (drivers may still be loaded). Proceeding with reboot." -Level 'INFO'
+        } else {
+            Write-UninstallLog "Uninstall completed. VMware Tools no longer present in registry. Proceeding with reboot." -Level 'SUCCESS'
+        }
         Start-Process 'shutdown.exe' -ArgumentList '/r /f /t 60 /c "Rebooting after VMware Tools uninstall."'
+    } else {
+        Verify-UninstallSuccess | Out-Null
     }
 }
 
@@ -139,19 +190,31 @@ function Invoke-ForceCleanup {
     }
 
     Write-Host "Force cleanup complete. A system reboot is highly recommended." -ForegroundColor Green
+    Write-UninstallLog "Force cleanup completed successfully." -Level 'SUCCESS'
 
     if ($RebootAfter) {
         Write-Host "Rebooting in 60 seconds after force cleanup..." -ForegroundColor Cyan
+        $isInstalled = Test-VMwareToolsInstalled
+        if ($isInstalled) {
+            Write-UninstallLog "Force cleanup initiated. VMware Tools registry entries still present. Proceeding with reboot." -Level 'WARNING'
+        } else {
+            Write-UninstallLog "Force cleanup completed. VMware Tools successfully removed from registry and filesystem. Proceeding with reboot." -Level 'SUCCESS'
+        }
         Start-Process 'shutdown.exe' -ArgumentList '/r /f /t 60 /c "Rebooting after VMware Tools force cleanup."'
+    } else {
+        Verify-UninstallSuccess | Out-Null
     }
 }
 
 function Invoke-RemoteRebootScheduler {
     Write-Host "Scheduling reboot using One_Time_Reboot_Scheduler..." -ForegroundColor Cyan
+    Write-UninstallLog "Invoking remote reboot scheduler." -Level 'INFO'
     try {
         iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
+        Write-UninstallLog "Remote reboot scheduler executed successfully." -Level 'INFO'
     } catch {
         Write-Warning "Failed to invoke the reboot scheduler. Error: $($_.Exception.Message)"
+        Write-UninstallLog "Failed to invoke reboot scheduler: $($_.Exception.Message)" -Level 'ERROR'
     }
 }
 
@@ -173,10 +236,12 @@ function Register-UninstallOnStartupTask {
 
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
     $trigger = New-ScheduledTaskTrigger -AtStartup
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
     $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal
+    $task = Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal
+    
+    Write-UninstallLog "Startup task '$taskName' registered successfully." -Level 'INFO'
 }
 
 function Invoke-ScheduledUninstall {
@@ -190,6 +255,11 @@ function Invoke-ScheduledUninstall {
 
     Write-Host "A startup task has been created to run the $forceText after reboot." -ForegroundColor Cyan
     Write-Host "Once the machine reboots, VMware Tools uninstall will run automatically, and the system will reboot again afterward." -ForegroundColor Cyan
+    Write-Host "" -ForegroundColor Cyan
+    Write-Host "Progress Details:" -ForegroundColor Cyan
+    Write-Host "  - Task Name: VMWareToolsScheduledUninstall" -ForegroundColor Cyan
+    Write-Host "  - Task History: Check Task Scheduler for execution details" -ForegroundColor Cyan
+    Write-Host "  - Uninstall Log: $LogPath" -ForegroundColor Cyan
 }
 
 # --- EXECUTION LOGIC ---
@@ -244,6 +314,9 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
     Write-Warning "This script requires Administrator privileges. Please run PowerShell as Administrator."
     Exit
 }
+
+Write-Host "VMware Tools Management Script" -ForegroundColor Cyan
+Write-Host "Uninstall logs are written to: $LogPath" -ForegroundColor Yellow
 
 if ($PSBoundParameters.Count) {
     if ($CheckHealth) {
