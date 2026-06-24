@@ -172,7 +172,7 @@ function Register-UninstallOnStartupTask {
     if ($RebootAfter) { $arguments += ' -RebootAfter' }
 
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
-    $trigger = New-ScheduledTaskTrigger -AtStartup -Delay (New-TimeSpan -Minutes 1)
+    $trigger = New-ScheduledTaskTrigger -AtStartup
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
