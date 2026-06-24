@@ -112,7 +112,95 @@ function Get-LatestVMwareToolsInfo {
 $installedVersion = Get-InstalledVMwareToolsVersion
 
 if (-not $installedVersion) {
-    Exit-Script -Reason "VMware Tools is not installed or could not be detected."
+    Write-Host "VMware Tools is not installed on this system."
+    
+    # Prompt user to install
+    $installConfirmation = ""
+    while ($installConfirmation -ne 'y' -and $installConfirmation -ne 'n') {
+        $installConfirmation = Read-Host "Would you like to install VMware Tools? (y/n)"
+        $installConfirmation = $installConfirmation.ToLower()
+    }
+    
+    if ($installConfirmation -ne 'y') {
+        Exit-Script -Reason "Installation cancelled by the user."
+    }
+    
+    # Find the latest version across all supported major versions
+    Write-Host "Searching for the latest available VMware Tools version..."
+    $supportedVersions = @("13", "12", "11", "10")
+    $latestToolsInfo = $null
+    
+    foreach ($majorVersion in $supportedVersions) {
+        $latestToolsInfo = Get-LatestVMwareToolsInfo -MajorVersion $majorVersion
+        if ($latestToolsInfo) {
+            break
+        }
+    }
+    
+    if (-not $latestToolsInfo) {
+        Exit-Script -Reason "Unable to find any available VMware Tools version to install."
+    }
+    
+    $latestToolsUrl = $latestToolsInfo.Url
+    $latestVersion = $latestToolsInfo.Version
+    
+    Write-Host "Latest available VMware Tools version found: $latestVersion"
+    
+    # --- 4. Download the installer ---
+    $downloadPath = "$env:TEMP\vmtools.exe"
+    Write-Host "Downloading VMware Tools version $latestVersion..."
+    Write-Host "Download URL: $latestToolsUrl" # Display the URL for verification
+    try {
+        Invoke-WebRequest -Uri $latestToolsUrl -OutFile $downloadPath
+        Write-Host "Download complete. Installer saved to $downloadPath"
+    }
+    catch {
+        Exit-Script -Reason "Failed to download the VMware Tools installer. Error: $($_.Exception.Message)"
+    }
+    
+    # --- 5. Prompt for installation type ---
+    $installType = ""
+    while ($installType -ne "gui" -and $installType -ne "silent") {
+        $installType = Read-Host "How would you like to install? (GUI/Silent)"
+        $installType = $installType.ToLower()
+    }
+    
+    Write-Host "Starting VMware Tools installation..."
+    try {
+        if ($installType -eq 'gui') {
+            Start-Process -FilePath $downloadPath -Wait
+        }
+        elseif ($installType -eq 'silent') {
+            Start-Process -FilePath $downloadPath -ArgumentList '/S /v"/qn REBOOT=ReallySuppress"' -Wait
+        }
+        Write-Host "VMware Tools installation process finished."
+    }
+    catch {
+        Exit-Script -Reason "An error occurred during the installation. Error: $($_.Exception.Message)"
+    }
+    
+    # --- 6. Prompt to schedule a reboot ---
+    $rebootConfirmation = ""
+    while ($rebootConfirmation -ne 'y' -and $rebootConfirmation -ne 'n') {
+        $rebootConfirmation = Read-Host "Installation is complete. Would you like to schedule a one-time reboot? (y/n)"
+        $rebootConfirmation = $rebootConfirmation.ToLower()
+    }
+    
+    if ($rebootConfirmation -eq 'y') {
+        Write-Host "Scheduling a one-time reboot..."
+        try {
+            iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/General%20Troubleshooting/One_Time_Reboot_Scheduler.ps1'))
+        }
+        catch {
+            Write-Warning "Failed to download and execute the reboot scheduler script. Error: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Host "Reboot not scheduled. Please reboot the machine at your earliest convenience."
+    }
+    
+    Write-Host "Script finished."
+    exit
 }
 
 Write-Host "Installed VMware Tools Version: $installedVersion"
