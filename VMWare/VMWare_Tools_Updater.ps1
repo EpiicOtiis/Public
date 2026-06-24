@@ -80,7 +80,7 @@ function Get-LatestVMwareToolsInfo {
 
             try {
                 $installerPage = Invoke-WebRequest -Uri $testUrl -UseBasicParsing -ErrorAction Stop
-                $installerFile = ($installerPage.Content | Select-String -Pattern 'VMware-tools-.*?x64\.exe' -AllMatches).Matches.Value | Select-Object -First 1
+                $installerFile = ($installerPage.Content | Select-String -Pattern 'VMware-tools-.*?(?:x64|x86_64)\.exe' -AllMatches).Matches.Value | Select-Object -First 1
 
                 if ($installerFile) {
                     $versionUrl = $testUrl
