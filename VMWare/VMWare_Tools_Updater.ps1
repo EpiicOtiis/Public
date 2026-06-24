@@ -70,23 +70,36 @@ function Get-LatestVMwareToolsInfo {
             return $null
         }
 
-        # Construct URL to the specific version's download page, accounting for different path structures
-        $versionUrlPath = if ($MajorVersion -eq "12") { "x64/" } else { "windows/x64/" }
-        $versionUrl = "https://packages.vmware.com/tools/releases/$latestVersionNumber/$versionUrlPath"
+        # Construct URL to the specific version's download page, trying known path patterns for older VMware Tools versions.
+        $possibleUrlPaths = @("windows/x64/", "x64/")
+        $installerFile = $null
+        $versionUrl = $null
 
-        $installerPage = Invoke-WebRequest -Uri $versionUrl -UseBasicParsing
-        
-        # Find the installer .exe file on the page
-        $installerFile = ($installerPage.Content | Select-String -Pattern 'VMware-tools-.*?x64\.exe' -AllMatches).Matches.Value | Select-Object -First 1
+        foreach ($path in $possibleUrlPaths) {
+            $testUrl = "https://packages.vmware.com/tools/releases/$latestVersionNumber/$path"
 
-        if ($installerFile) {
+            try {
+                $installerPage = Invoke-WebRequest -Uri $testUrl -UseBasicParsing -ErrorAction Stop
+                $installerFile = ($installerPage.Content | Select-String -Pattern 'VMware-tools-.*?x64\.exe' -AllMatches).Matches.Value | Select-Object -First 1
+
+                if ($installerFile) {
+                    $versionUrl = $testUrl
+                    break
+                }
+            }
+            catch {
+                continue
+            }
+        }
+
+        if ($installerFile -and $versionUrl) {
             return [PSCustomObject]@{
                 Url     = "$versionUrl$installerFile"
                 Version = $latestVersionNumber
             }
         } else {
-             Write-Warning "Could not find the installer file on the release page for version $latestVersionNumber."
-             return $null
+            Write-Warning "Could not find the installer file on the release page for version $latestVersionNumber."
+            return $null
         }
     }
     catch {
@@ -106,8 +119,8 @@ Write-Host "Installed VMware Tools Version: $installedVersion"
 
 $majorInstalledVersion = ($installedVersion -split '\.')[0]
 
-if ($majorInstalledVersion -ne "12" -and $majorInstalledVersion -ne "13") {
-    Exit-Script -Reason "This script only supports updating versions 12.x.x and 13.x.x of VMware Tools."
+if ($majorInstalledVersion -notin @("10", "11", "12", "13")) {
+    Exit-Script -Reason "This script only supports updating versions 10.x.x, 11.x.x, 12.x.x and 13.x.x of VMware Tools."
 }
 
 $latestToolsInfo = Get-LatestVMwareToolsInfo -MajorVersion $majorInstalledVersion
@@ -140,7 +153,7 @@ if ($updateConfirmation -ne 'y') {
 # --- 4. Download the installer ---
 $downloadPath = "$env:TEMP\vmtools.exe"
 Write-Host "Downloading VMware Tools version $latestVersion..."
-Write-Host "From URL: $latestToolsUrl" # Display the URL for verification
+Write-Host "Download URL: $latestToolsUrl" # Display the URL for verification
 try {
     Invoke-WebRequest -Uri $latestToolsUrl -OutFile $downloadPath
     Write-Host "Download complete. Installer saved to $downloadPath"
