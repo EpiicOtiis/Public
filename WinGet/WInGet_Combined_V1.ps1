@@ -140,7 +140,11 @@ if ($args.Count -gt 0) {
             List-InstalledPackages
             exit 0
         }
-        'help' | '?' {
+        'help' {
+            Show-Usage
+            exit 0
+        }
+        '?' {
             Show-Usage
             exit 0
         }
