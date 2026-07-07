@@ -154,6 +154,67 @@ function Run-RepadminCommands {
 
     Write-Host "`n=== Replication Sync Status (repadmin /syncall) ===" -ForegroundColor Green
     try { repadmin /syncall /e /d } catch { Write-Host "Error running repadmin /syncall: $_" -ForegroundColor Red }
+
+    Write-Host "`n=== KCC Topology Generation (repadmin /kcc) ===" -ForegroundColor Green
+    try {
+        if ($domainControllers -and $domainControllers.Count -gt 0) {
+            foreach ($dc in $domainControllers) {
+                $memberName = if ($dc.DNSHostName) { $dc.DNSHostName } else { $dc.Name }
+                try {
+                    Write-Host "Running repadmin /kcc on $memberName"
+                    repadmin /kcc $memberName
+                } catch {
+                    Write-Host "Error running repadmin /kcc on $memberName: $_" -ForegroundColor Red
+                }
+            }
+        } else {
+            Write-Host "No domain controllers found to run repadmin /kcc." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Unexpected error during repadmin /kcc operations: $_" -ForegroundColor Red
+    }
+}
+
+function Run-NetworkConnectivityTests {
+    Write-Host "`n=== Network Connectivity Tests (Test-NetConnection) ===" -ForegroundColor Green
+
+    $ports = @{
+        'LDAP'     = 389
+        'LDAPS'    = 636
+        'Kerberos' = 88
+        'DNS'      = 53
+        'SMB'      = 445
+        'RPC'      = 135
+    }
+
+    if (-not ($domainControllers -and $domainControllers.Count -gt 0)) {
+        Write-Host "No domain controllers found for network connectivity tests." -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($dc in $domainControllers) {
+        $target = if ($dc.DNSHostName) { $dc.DNSHostName } else { $dc.Name }
+        Write-Host "`n--- Testing connectivity to $target ---" -ForegroundColor Cyan
+
+        foreach ($svc in $ports.Keys) {
+            $port = $ports[$svc]
+            try {
+                $res = Test-NetConnection -ComputerName $target -Port $port -WarningAction SilentlyContinue
+                $success = $false
+                if ($null -ne $res) {
+                    if ($res.TcpTestSucceeded -eq $true) { $success = $true }
+                }
+
+                if ($success) {
+                    Write-Host "$svc ($port) on $target : SUCCESS" -ForegroundColor Green
+                } else {
+                    Write-Host "$svc ($port) on $target : FAILED" -ForegroundColor Red
+                }
+            } catch {
+                Write-Host "Error testing $svc ($port) on $target: $_" -ForegroundColor Red
+            }
+        }
+    }
 }
 
 # --- DFSR Diagnostic Checks ---
@@ -339,6 +400,8 @@ if ($domainControllers) {
     
     # Run the rest of the diagnostics
     Run-RepadminCommands
+    # Run network connectivity tests to DCs for common AD ports
+    Run-NetworkConnectivityTests
     Run-DFSRDiagChecks
     Run-DCDiagTests
     Check-EventViewerErrors
