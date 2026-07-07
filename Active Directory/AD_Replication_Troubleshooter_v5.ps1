@@ -115,7 +115,8 @@ try {
         Write-Host "No servers found in AD sites." -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "A critical error occurred while retrieving AD site information: $($_)" -ForegroundColor Red
+    $err = $_
+    Write-Host ("A critical error occurred while retrieving AD site information: {0}" -f $err) -ForegroundColor Red
 }
 
 # --- FSMO Role Check ---
@@ -139,7 +140,8 @@ function Get-FSMORoles {
         Write-Host "Infrastructure Master: $($domain.InfrastructureMaster)"
     }
     catch {
-        Write-Host "Error retrieving FSMO roles: $($_)" -ForegroundColor Red
+        $err = $_
+        Write-Host ("Error retrieving FSMO roles: {0}" -f $err) -ForegroundColor Red
     }
 }
 
@@ -147,13 +149,13 @@ function Get-FSMORoles {
 # --- Replication Diagnostics ---
 function Run-RepadminCommands {
     Write-Host "`n=== Replication Summary (repadmin /replsummary) ===" -ForegroundColor Green
-    try { repadmin /replsummary } catch { Write-Host "Error running repadmin /replsummary: $($_)" -ForegroundColor Red }
+    try { repadmin /replsummary } catch { $err = $_; Write-Host ("Error running repadmin /replsummary: {0}" -f $err) -ForegroundColor Red }
 
     Write-Host "`n=== Replication Queue (repadmin /queue) ===" -ForegroundColor Green
-    try { repadmin /queue } catch { Write-Host "Error running repadmin /queue: $($_)" -ForegroundColor Red }
+    try { repadmin /queue } catch { $err = $_; Write-Host ("Error running repadmin /queue: {0}" -f $err) -ForegroundColor Red }
 
     Write-Host "`n=== Replication Sync Status (repadmin /syncall) ===" -ForegroundColor Green
-    try { repadmin /syncall /e /d } catch { Write-Host "Error running repadmin /syncall: $($_)" -ForegroundColor Red }
+    try { repadmin /syncall /e /d } catch { $err = $_; Write-Host ("Error running repadmin /syncall: {0}" -f $err) -ForegroundColor Red }
 
     Write-Host "`n=== KCC Topology Generation (repadmin /kcc) ===" -ForegroundColor Green
     try {
@@ -164,14 +166,16 @@ function Run-RepadminCommands {
                     Write-Host "Running repadmin /kcc on $memberName"
                     repadmin /kcc $memberName
                 } catch {
-                    Write-Host "Error running repadmin /kcc on $memberName: $($_)" -ForegroundColor Red
+                    $err = $_
+                    Write-Host ("Error running repadmin /kcc on {0}: {1}" -f $memberName, $err) -ForegroundColor Red
                 }
             }
         } else {
             Write-Host "No domain controllers found to run repadmin /kcc." -ForegroundColor Yellow
         }
     } catch {
-        Write-Host "Unexpected error during repadmin /kcc operations: $($_)" -ForegroundColor Red
+        $err = $_
+        Write-Host ("Unexpected error during repadmin /kcc operations: {0}" -f $err) -ForegroundColor Red
     }
 }
 
@@ -211,7 +215,8 @@ function Run-NetworkConnectivityTests {
                     Write-Host "$svc ($port) on $target : FAILED" -ForegroundColor Red
                 }
             } catch {
-                Write-Host "Error testing $svc ($port) on $target: $($_)" -ForegroundColor Red
+                $err = $_
+                Write-Host ("Error testing {0} ({1}) on {2}: {3}" -f $svc, $port, $target, $err) -ForegroundColor Red
             }
         }
     }
@@ -235,21 +240,24 @@ function Ensure-DFSRDiagTool {
             Install-WindowsFeature RSAT-DFS-Mgmt-Con -IncludeAllSubFeature -ErrorAction Stop | Out-Null
             $installSucceeded = $true
         } catch {
-            Write-Host "Install-WindowsFeature failed: $($_)" -ForegroundColor Red
+            $err = $_
+            Write-Host ("Install-WindowsFeature failed: {0}" -f $err) -ForegroundColor Red
         }
     } elseif (Get-Command Add-WindowsCapability -ErrorAction SilentlyContinue) {
         try {
             Add-WindowsCapability -Online -Name "Rsat.Dfs.Tools~~~~0.0.1.0" -ErrorAction Stop | Out-Null
             $installSucceeded = $true
         } catch {
-            Write-Host "Add-WindowsCapability failed: $($_)" -ForegroundColor Red
+            $err = $_
+            Write-Host ("Add-WindowsCapability failed: {0}" -f $err) -ForegroundColor Red
         }
     } elseif (Get-Command Enable-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
         try {
             Enable-WindowsOptionalFeature -Online -FeatureName "RSATDFS-Mgmt-Con" -NoRestart -All -ErrorAction Stop | Out-Null
             $installSucceeded = $true
         } catch {
-            Write-Host "Enable-WindowsOptionalFeature failed: $($_)" -ForegroundColor Red
+            $err = $_
+            Write-Host ("Enable-WindowsOptionalFeature failed: {0}" -f $err) -ForegroundColor Red
         }
     } else {
         Write-Host "No supported installation cmdlet found. Please install DFSR tools manually." -ForegroundColor Red
@@ -277,14 +285,16 @@ function Run-DFSRDiagChecks {
         Write-Host "`n--- dfsrdiag pollad /verbose ---" -ForegroundColor Cyan
         & dfsrdiag pollad /verbose
     } catch {
-        Write-Host "Error running dfsrdiag pollad: $($_)" -ForegroundColor Red
+        $err = $_
+        Write-Host ("Error running dfsrdiag pollad: {0}" -f $err) -ForegroundColor Red
     }
 
     try {
         Write-Host "`n--- dfsrdiag replicationstate /verbose ---" -ForegroundColor Cyan
         & dfsrdiag replicationstate /verbose
     } catch {
-        Write-Host "Error running dfsrdiag replicationstate: $($_)" -ForegroundColor Red
+        $err = $_
+        Write-Host ("Error running dfsrdiag replicationstate: {0}" -f $err) -ForegroundColor Red
     }
 
     if ($domainControllers.Count -gt 0) {
@@ -349,10 +359,10 @@ function Run-DFSRDiagChecks {
 # --- DCDiag Tests ---
 function Run-DCDiagTests {
     Write-Host "`n=== DCDiag Replication Tests ===" -ForegroundColor Green
-    try { dcdiag /test:replications /v } catch { Write-Host "Error running dcdiag /test:Replication: $($_)" -ForegroundColor Red }
+    try { dcdiag /test:replications /v } catch { $err = $_; Write-Host ("Error running dcdiag /test:Replication: {0}" -f $err) -ForegroundColor Red }
 
     Write-Host "`n=== DCDiag General Tests ===" -ForegroundColor Green
-    try { dcdiag /v } catch { Write-Host "Error running dcdiag: $($_)" -ForegroundColor Red }
+    try { dcdiag /v } catch { $err = $_; Write-Host ("Error running dcdiag: {0}" -f $err) -ForegroundColor Red }
 }
 
 # --- Event Viewer Check ---
