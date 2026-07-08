@@ -65,7 +65,7 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%2
   ```
 
 ```powershell
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WinGet_Combined_V1.ps1 | iex
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1 | iex
 ```
 
 
