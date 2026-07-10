@@ -9,9 +9,44 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%2
 ```
 
 - **AD_Replication_Troubleshooter_v5.ps1**: Gathers AD site/DC info, reports FSMO holders, runs repadmin/dcdiag diagnostics, and checks Directory Service event logs for replication issues. Must be run as a Domain Admin!!!
-```powershell
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1 | iex
-```
+
+  By default, it executes all diagnostic checks:
+  ```powershell
+  irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1 | iex
+  ```
+
+  You can also run specific components individually using command-line switch parameters:
+
+  * **FSMO Role Check**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -FSMO
+    ```
+
+  * **Replication Diagnostics** (repadmin summary, queue, syncall, kcc)
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -Repadmin
+    ```
+
+  * **Network Connectivity Tests**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -Connectivity
+    ```
+
+  * **DFSR Diagnostic Checks** (dfsrdiag & SYSVOL backlog checks)
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -DFSR
+    ```
+
+  * **DCDiag Tests** (replications & general tests)
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -DCDiag
+    ```
+
+  * **Event Viewer Check** (Directory Service & DFS replication logs)
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Active%20Directory/AD_Replication_Troubleshooter_v5.ps1))) -EventViewer
+    ```
+
 
 <!-- Hiding this block. The efficacy of these two scripts is questionable, while they work, it they do not resolve the issue they were created for.
 ### Run DFSR_Clear_Conflict_and_Stale_Data_Multiple_DC Script:
@@ -56,17 +91,25 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%2
 
 - **WinGet_Combined_V1.ps1**: Wrapper/utility around `winget` to install, update, or uninstall packages and ensure `winget` is present; supports both interactive menu mode and command-line arguments.
 
-  Command-line examples:
+  By default, it launches an interactive menu:
   ```powershell
-  .\WinGet_Combined_V1.ps1 /updateall
-  .\WinGet_Combined_V1.ps1 /uninstall <PackageIdOrName>
-  .\WinGet_Combined_V1.ps1 /list
-  .\WinGet_Combined_V1.ps1 /help
+  irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1 | iex
   ```
 
-```powershell
-irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1 | iex
-```
+  You can also pass arguments to execute tasks directly:
+  ```powershell
+  # Update all packages
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /updateall
+
+  # Uninstall a specific package
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /uninstall <PackageIdOrName>
+
+  # List packages
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /list
+
+  # Show help
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /help
+  ```
 
 
 **System Information & Utilities**

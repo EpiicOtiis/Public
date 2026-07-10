@@ -35,6 +35,25 @@ Error Handling:
 
 #requires -RunAsAdministrator
 
+param (
+    [switch]$FSMO,
+    [switch]$Repadmin,
+    [switch]$Connectivity,
+    [switch]$DFSR,
+    [switch]$DCDiag,
+    [switch]$EventViewer
+)
+
+# If no specific switches are set, default to running all checks
+if (-not ($FSMO -or $Repadmin -or $Connectivity -or $DFSR -or $DCDiag -or $EventViewer)) {
+    $FSMO = $true
+    $Repadmin = $true
+    $Connectivity = $true
+    $DFSR = $true
+    $DCDiag = $true
+    $EventViewer = $true
+}
+
 # Import the ActiveDirectory module
 Import-Module ActiveDirectory -ErrorAction Stop
 
@@ -432,16 +451,35 @@ function Check-EventViewerErrors {
 # --- Execute Diagnostic Steps ---
 # This part now works correctly because the script will no longer halt on a single server error.
 if ($domainControllers) {
-    # Run the FSMO Role check
-    Get-FSMORoles
+    if ($FSMO) {
+        # Run the FSMO Role check
+        Get-FSMORoles
+    }
     
-    # Run the rest of the diagnostics
-    Run-RepadminCommands
-    # Run network connectivity tests to DCs for common AD ports
-    Run-NetworkConnectivityTests
-    Run-DFSRDiagChecks
-    Run-DCDiagTests
-    Check-EventViewerErrors
+    if ($Repadmin) {
+        # Run replication diagnostics
+        Run-RepadminCommands
+    }
+    
+    if ($Connectivity) {
+        # Run network connectivity tests to DCs for common AD ports
+        Run-NetworkConnectivityTests
+    }
+    
+    if ($DFSR) {
+        # Run DFSR diagnostic checks
+        Run-DFSRDiagChecks
+    }
+    
+    if ($DCDiag) {
+        # Run DCDiag tests
+        Run-DCDiagTests
+    }
+    
+    if ($EventViewer) {
+        # Run Event Viewer checks
+        Check-EventViewerErrors
+    }
 }
 else {
     Write-Host "`nSkipping FSMO, replication, and diagnostic tests because no domain controllers were identified." -ForegroundColor Yellow
