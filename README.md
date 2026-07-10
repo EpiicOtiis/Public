@@ -97,19 +97,26 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%2
   ```
 
   You can also pass arguments to execute tasks directly:
-  ```powershell
-  # Update all packages
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /updateall
 
-  # Uninstall a specific package
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /uninstall <PackageIdOrName>
+  * **Update all packages**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /updateall
+    ```
 
-  # List packages
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /list
+  * **Uninstall a specific package**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /uninstall <PackageIdOrName>
+    ```
 
-  # Show help
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /help
-  ```
+  * **List packages**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /list
+    ```
+
+  * **Show help**
+    ```powershell
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/WinGet/WInGet_Combined_V1.ps1))) /help
+    ```
 
 
 **System Information & Utilities**
