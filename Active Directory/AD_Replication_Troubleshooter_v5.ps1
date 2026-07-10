@@ -11,14 +11,19 @@ Domain Controller Identification:
 FSMO Role Check:
 # Identifies and displays the holders of the five FSMO roles (both forest-wide and domain-wide).
 
+Network Connectivity Tests:
+# Performs port connectivity checks (Test-NetConnection) on critical AD ports (LDAP, LDAPS, Kerberos, DNS, SMB, RPC) for all domain controllers.
+
 Replication Diagnostics:
 # Runs repadmin /replsummary to show a summary of replication status.
 # Runs repadmin /queue to display pending replication tasks.
 # Runs repadmin /syncall /e /d to check synchronization status across all domain controllers.
-# Runs DFSR diagnostic checks including pollad, replicationstate, state, and SYSVOL backlog.
+# Runs repadmin /kcc on each domain controller to force KCC topology checks.
+# Ensures the dfsrdiag tool is available (installing if necessary).
+# Runs DFSR diagnostic checks including pollad, replicationstate, dumpmachinecfg, and SYSVOL backlog tests.
 
 DCDiag Tests:
-# Executes dcdiag /test:Replication to specifically test replication.
+# Executes dcdiag /test:replications to specifically test replication.
 # Runs a general dcdiag /v for broader diagnostic information.
 
 Event Viewer Check:
@@ -75,33 +80,34 @@ try {
                 # Attempt to resolve the IP address for the server's DNS hostname
                 $ipAddress = try {
                     (Resolve-DnsName -Name $server.dNSHostName -Type A -ErrorAction Stop).IPAddress
-                } catch {
+                }
+                catch {
                     "Unresolvable"
                 }
                 
                 $serverInfo += [PSCustomObject]@{
-                    SiteName     = $site.Name
-                    ServerName   = $server.Name
-                    DNSHostName  = $server.dNSHostName
-                    IPAddress    = $ipAddress
+                    SiteName           = $site.Name
+                    ServerName         = $server.Name
+                    DNSHostName        = $server.dNSHostName
+                    IPAddress          = $ipAddress
                     IsDomainController = $isDC
-                    Domain       = $domain
-                    IsGlobalCatalog = $isGC
-                    Status       = $dcStatus
+                    Domain             = $domain
+                    IsGlobalCatalog    = $isGC
+                    Status             = $dcStatus
                 }
             }
             catch {
                 # This block now catches the error for a single server and reports it.
                 # The script will then continue to the next server in the list.
                 $serverInfo += [PSCustomObject]@{
-                    SiteName     = $site.Name
-                    ServerName   = $server.Name
-                    DNSHostName  = $server.dNSHostName
-                    IPAddress    = "N/A"
+                    SiteName           = $site.Name
+                    ServerName         = $server.Name
+                    DNSHostName        = $server.dNSHostName
+                    IPAddress          = "N/A"
                     IsDomainController = $false
-                    Domain       = "N/A"
-                    IsGlobalCatalog = "N/A"
-                    Status       = "ERROR: Not a DC or unreachable."
+                    Domain             = "N/A"
+                    IsGlobalCatalog    = "N/A"
+                    Status             = "ERROR: Not a DC or unreachable."
                 }
             }
         }
@@ -111,10 +117,12 @@ try {
     if ($serverInfo) {
         Write-Host "`n=== AD Site Server Details ===" -ForegroundColor Green
         $serverInfo | Format-Table -AutoSize
-    } else {
+    }
+    else {
         Write-Host "No servers found in AD sites." -ForegroundColor Yellow
     }
-} catch {
+}
+catch {
     $err = $_
     Write-Host ("A critical error occurred while retrieving AD site information: {0}" -f $err) -ForegroundColor Red
 }
@@ -165,15 +173,18 @@ function Run-RepadminCommands {
                 try {
                     Write-Host "Running repadmin /kcc on $memberName"
                     repadmin /kcc $memberName
-                } catch {
+                }
+                catch {
                     $err = $_
                     Write-Host ("Error running repadmin /kcc on {0}: {1}" -f $memberName, $err) -ForegroundColor Red
                 }
             }
-        } else {
+        }
+        else {
             Write-Host "No domain controllers found to run repadmin /kcc." -ForegroundColor Yellow
         }
-    } catch {
+    }
+    catch {
         $err = $_
         Write-Host ("Unexpected error during repadmin /kcc operations: {0}" -f $err) -ForegroundColor Red
     }
@@ -211,10 +222,12 @@ function Run-NetworkConnectivityTests {
 
                 if ($success) {
                     Write-Host "$svc ($port) on $target : SUCCESS" -ForegroundColor Green
-                } else {
+                }
+                else {
                     Write-Host "$svc ($port) on $target : FAILED" -ForegroundColor Red
                 }
-            } catch {
+            }
+            catch {
                 $err = $_
                 Write-Host ("Error testing {0} ({1}) on {2}: {3}" -f $svc, $port, $target, $err) -ForegroundColor Red
             }
@@ -239,27 +252,33 @@ function Ensure-DFSRDiagTool {
         try {
             Install-WindowsFeature RSAT-DFS-Mgmt-Con -IncludeAllSubFeature -ErrorAction Stop | Out-Null
             $installSucceeded = $true
-        } catch {
+        }
+        catch {
             $err = $_
             Write-Host ("Install-WindowsFeature failed: {0}" -f $err) -ForegroundColor Red
         }
-    } elseif (Get-Command Add-WindowsCapability -ErrorAction SilentlyContinue) {
+    }
+    elseif (Get-Command Add-WindowsCapability -ErrorAction SilentlyContinue) {
         try {
             Add-WindowsCapability -Online -Name "Rsat.Dfs.Tools~~~~0.0.1.0" -ErrorAction Stop | Out-Null
             $installSucceeded = $true
-        } catch {
+        }
+        catch {
             $err = $_
             Write-Host ("Add-WindowsCapability failed: {0}" -f $err) -ForegroundColor Red
         }
-    } elseif (Get-Command Enable-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
+    }
+    elseif (Get-Command Enable-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
         try {
             Enable-WindowsOptionalFeature -Online -FeatureName "RSATDFS-Mgmt-Con" -NoRestart -All -ErrorAction Stop | Out-Null
             $installSucceeded = $true
-        } catch {
+        }
+        catch {
             $err = $_
             Write-Host ("Enable-WindowsOptionalFeature failed: {0}" -f $err) -ForegroundColor Red
         }
-    } else {
+    }
+    else {
         Write-Host "No supported installation cmdlet found. Please install DFSR tools manually." -ForegroundColor Red
         return $false
     }
@@ -284,7 +303,8 @@ function Run-DFSRDiagChecks {
     try {
         Write-Host "`n--- dfsrdiag pollad /verbose ---" -ForegroundColor Cyan
         & dfsrdiag pollad /verbose
-    } catch {
+    }
+    catch {
         $err = $_
         Write-Host ("Error running dfsrdiag pollad: {0}" -f $err) -ForegroundColor Red
     }
@@ -292,7 +312,8 @@ function Run-DFSRDiagChecks {
     try {
         Write-Host "`n--- dfsrdiag replicationstate /verbose ---" -ForegroundColor Cyan
         & dfsrdiag replicationstate /verbose
-    } catch {
+    }
+    catch {
         $err = $_
         Write-Host ("Error running dfsrdiag replicationstate: {0}" -f $err) -ForegroundColor Red
     }
@@ -303,7 +324,8 @@ function Run-DFSRDiagChecks {
             try {
                 Write-Host "`n--- dfsrdiag dumpmachinecfg /member:${memberName} ---" -ForegroundColor Cyan
                 & dfsrdiag dumpmachinecfg /member:${memberName}
-            } catch {
+            }
+            catch {
                 Write-Host "Error running dfsrdiag dumpmachinecfg for ${memberName}: ${_}" -ForegroundColor Red
             }
         }
@@ -329,14 +351,16 @@ function Run-DFSRDiagChecks {
                             $pairCheckSucceeded = $true
                             Write-Host "[SUCCESS] Backlog check succeeded for ${sourceName} -> ${destinationName} (${rfname})" -ForegroundColor Green
                             break  # Exit loop if successful
-                        } catch {
+                        }
+                        catch {
                             # Continue to next folder name
                         }
                     }
                     
                     if ($pairCheckSucceeded) {
                         $sysvolChecksPassed++
-                    } else {
+                    }
+                    else {
                         $sysvolChecksFailed++
                         Write-Host "[FAILED] Backlog check failed for ${sourceName} -> ${destinationName} (tried both SYSVOL and SYSVOL Share)" -ForegroundColor Red
                     }
@@ -348,10 +372,12 @@ function Run-DFSRDiagChecks {
         Write-Host "Passed: ${sysvolChecksPassed} | Failed: ${sysvolChecksFailed}" -ForegroundColor Yellow
         if ($sysvolChecksFailed -eq 0) {
             Write-Host "[SUCCESS] All SYSVOL backlog checks passed!" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host "[WARNING] Some SYSVOL backlog checks failed. Review errors above." -ForegroundColor Yellow
         }
-    } else {
+    }
+    else {
         Write-Host "Not enough domain controllers found to perform SYSVOL backlog checks." -ForegroundColor Yellow
     }
 }
@@ -397,7 +423,8 @@ function Check-EventViewerErrors {
             Write-Host "`nDFS Replication Log:" -ForegroundColor Cyan
             $dfsrEvents | Select-Object TimeCreated, Id, Message | Format-Table -Wrap -AutoSize
         }
-    } else {
+    }
+    else {
         Write-Host "No replication-related or SYSVOL-related errors found in Event Viewer in the last 24 hours." -ForegroundColor Green
     }
 }
@@ -415,7 +442,8 @@ if ($domainControllers) {
     Run-DFSRDiagChecks
     Run-DCDiagTests
     Check-EventViewerErrors
-} else {
+}
+else {
     Write-Host "`nSkipping FSMO, replication, and diagnostic tests because no domain controllers were identified." -ForegroundColor Yellow
 }
 
