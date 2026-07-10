@@ -60,6 +60,47 @@ Import-Module ActiveDirectory -ErrorAction Stop
 # --- Main script execution ---
 Write-Host "=== Active Directory Replication Troubleshooting Script ===" -ForegroundColor Cyan
 
+# --- Local Network Configuration ---
+Write-Host "`n=== Local System Network Configuration ===" -ForegroundColor Green
+try {
+    # Hostname & DNS Domain info
+    $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+    $dnsDomain = (Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -ErrorAction Stop | Where-Object { $_.DNSDomain }).DNSDomain | Select-Object -Unique -First 1
+    
+    Write-Host ("Host Name          : {0}" -f $computerSystem.Name)
+    Write-Host ("Primary DNS Suffix : {0}" -f $dnsDomain)
+    Write-Host ("Domain/Workgroup   : {0}" -f $computerSystem.Domain)
+    Write-Host ("System Type        : {0}" -f $computerSystem.SystemType)
+    Write-Host ""
+
+    # Active adapters configuration
+    $adapters = Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" -ErrorAction Stop
+    foreach ($adapter in $adapters) {
+        Write-Host ("Adapter: {0}" -f $adapter.Description) -ForegroundColor Cyan
+        Write-Host "--------------------------------------------------"
+        
+        $ips = if ($adapter.IPAddress) { $adapter.IPAddress -join ", " } else { "N/A" }
+        $subnets = if ($adapter.IPSubnet) { $adapter.IPSubnet -join ", " } else { "N/A" }
+        $gateways = if ($adapter.DefaultIPGateway) { $adapter.DefaultIPGateway -join ", " } else { "N/A" }
+        $dns = if ($adapter.DNSServerSearchOrder) { $adapter.DNSServerSearchOrder -join ", " } else { "N/A" }
+        
+        Write-Host ("  DHCP Enabled     : {0}" -f $adapter.DHCPEnabled)
+        Write-Host ("  IP Address(es)   : {0}" -f $ips)
+        Write-Host ("  Subnet Mask(s)   : {0}" -f $subnets)
+        Write-Host ("  Default Gateway  : {0}" -f $gateways)
+        if ($adapter.DHCPEnabled) {
+            Write-Host ("  DHCP Server      : {0}" -f $adapter.DHCPServer)
+        }
+        Write-Host ("  DNS Servers      : {0}" -f $dns)
+        Write-Host ("  MAC Address      : {0}" -f $adapter.MACAddress)
+        Write-Host ""
+    }
+}
+catch {
+    $err = $_
+    Write-Host ("Error retrieving local network settings: {0}" -f $err) -ForegroundColor Red
+}
+
 # --- Domain Controller Identification ---
 Write-Host "`n=== Collecting AD Site and Server Information ===" -ForegroundColor Cyan
 $serverInfo = @()
@@ -103,6 +144,35 @@ try {
                 catch {
                     "Unresolvable"
                 }
+
+                # Attempt to retrieve DNS Server forwarders if the server is a DC
+                $dnsForwarders = "N/A"
+                if ($isDC) {
+                    try {
+                        if (Get-Command Get-DnsServerForwarder -ErrorAction SilentlyContinue) {
+                            $forwardersObj = Get-DnsServerForwarder -ComputerName $server.Name -ErrorAction Stop
+                            if ($forwardersObj -and $forwardersObj.IPAddress) {
+                                $dnsForwarders = ($forwardersObj.IPAddress.IPAddressToString) -join ", "
+                            }
+                            else {
+                                $dnsForwarders = "None"
+                            }
+                        }
+                        else {
+                            # Fallback to CIM/WMI if Get-DnsServerForwarder is not available locally
+                            $dnsObj = Get-CimInstance -Namespace root\MicrosoftDNS -ClassName MicrosoftDNS_Server -ComputerName $server.Name -ErrorAction Stop
+                            if ($dnsObj -and $dnsObj.Forwarders) {
+                                $dnsForwarders = ($dnsObj.Forwarders) -join ", "
+                            }
+                            else {
+                                $dnsForwarders = "None"
+                            }
+                        }
+                    }
+                    catch {
+                        $dnsForwarders = "Unknown / Query Failed"
+                    }
+                }
                 
                 $serverInfo += [PSCustomObject]@{
                     SiteName           = $site.Name
@@ -112,6 +182,7 @@ try {
                     IsDomainController = $isDC
                     Domain             = $domain
                     IsGlobalCatalog    = $isGC
+                    DNSForwarders      = $dnsForwarders
                     Status             = $dcStatus
                 }
             }
@@ -126,6 +197,7 @@ try {
                     IsDomainController = $false
                     Domain             = "N/A"
                     IsGlobalCatalog    = "N/A"
+                    DNSForwarders      = "N/A"
                     Status             = "ERROR: Not a DC or unreachable."
                 }
             }
@@ -136,6 +208,16 @@ try {
     if ($serverInfo) {
         Write-Host "`n=== AD Site Server Details ===" -ForegroundColor Green
         $serverInfo | Format-Table -AutoSize
+
+        # Display DNS Server Forwarders details if available
+        $dnsServers = $serverInfo | Where-Object { $_.IsDomainController -eq $true -and $_.DNSForwarders -ne "N/A" }
+        if ($dnsServers) {
+            Write-Host "`n=== DNS Server Forwarders ===" -ForegroundColor Green
+            foreach ($dnsServer in $dnsServers) {
+                Write-Host "Server: $($dnsServer.ServerName) ($($dnsServer.IPAddress))" -ForegroundColor Cyan
+                Write-Host "Forwarders: $($dnsServer.DNSForwarders)"
+            }
+        }
     }
     else {
         Write-Host "No servers found in AD sites." -ForegroundColor Yellow
