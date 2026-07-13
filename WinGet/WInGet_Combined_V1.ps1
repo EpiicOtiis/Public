@@ -192,6 +192,12 @@ function Search-WingetPackage {
             elseif ($col.Name -ieq "source") { $norm = "Source" }
             $row[$norm] = $val
         }
+        # Extract Publisher from Id prefix
+        if ($row.Contains("Id") -and $row["Id"] -like "*.*") {
+            $row["Publisher"] = $row["Id"].Split('.')[0]
+        } else {
+            $row["Publisher"] = "N/A"
+        }
         $results += [PSCustomObject]$row
     }
     return $results
@@ -349,32 +355,51 @@ while ($continueActions) {
                     }
                 }
                 else {
-                    Write-Host "`nMatches found for '$SearchQuery':`n" -ForegroundColor Cyan
-                    # Print formatted table header
-                    Write-Host ("{0,-4} {1,-35} {2,-35} {3,-15}" -f "#", "Name", "Id", "Version") -ForegroundColor Yellow
-                    Write-Host ("{0,-4} {1,-35} {2,-35} {3,-15}" -f "-", "----", "--", "-------") -ForegroundColor Yellow
+                    $pageSize = 15
+                    $currentPage = 0
+                    $totalPage = [Math]::Ceiling($results.Count / $pageSize)
+                    $browsing = $true
 
-                    # Display up to 30 top matches
-                    $displayCount = [Math]::Min($results.Count, 30)
-                    for ($i = 0; $i -lt $displayCount; $i++) {
-                        $r = $results[$i]
-                        # Truncate strings to prevent wrapping/misalignment
-                        $displayName = if ($r.Name.Length -gt 33) { $r.Name.Substring(0, 30) + "..." } else { $r.Name }
-                        $displayId = if ($r.Id.Length -gt 33) { $r.Id.Substring(0, 30) + "..." } else { $r.Id }
-                        $displayVer = if ($r.Version.Length -gt 13) { $r.Version.Substring(0, 10) + "..." } else { $r.Version }
+                    while ($browsing) {
+                        Write-Host "`nMatches found for '$SearchQuery' (Page $($currentPage + 1) of $totalPage):`n" -ForegroundColor Cyan
+                        # Print formatted table header including Publisher
+                        Write-Host ("{0,-4} {1,-15} {2,-30} {3,-35} {4,-15}" -f "#", "Publisher", "Name", "Id", "Version") -ForegroundColor Yellow
+                        Write-Host ("{0,-4} {1,-15} {2,-30} {3,-35} {4,-15}" -f "-", "---------", "----", "--", "-------") -ForegroundColor Yellow
 
-                        Write-Host ("[{0,-2}] {1,-35} {2,-35} {3,-15}" -f ($i + 1), $displayName, $displayId, $displayVer)
-                    }
-                    
-                    if ($results.Count -gt 30) {
-                        Write-Host "...and $($results.Count - 30) more matches." -ForegroundColor DarkCyan
-                    }
+                        $startIdx = $currentPage * $pageSize
+                        $endIdx = [Math]::Min($startIdx + $pageSize - 1, $results.Count - 1)
 
-                    $selection = Read-Host "`nEnter the number of the package you want to install (or press Enter to cancel)"
-                    if (-not [string]::IsNullOrWhiteSpace($selection)) {
-                        if ($selection -match '^\d+$') {
+                        for ($i = $startIdx; $i -le $endIdx; $i++) {
+                            $r = $results[$i]
+                            $displayPub = if ($r.Publisher.Length -gt 13) { $r.Publisher.Substring(0, 10) + "..." } else { $r.Publisher }
+                            $displayName = if ($r.Name.Length -gt 28) { $r.Name.Substring(0, 25) + "..." } else { $r.Name }
+                            $displayId = if ($r.Id.Length -gt 33) { $r.Id.Substring(0, 30) + "..." } else { $r.Id }
+                            $displayVer = if ($r.Version.Length -gt 13) { $r.Version.Substring(0, 10) + "..." } else { $r.Version }
+
+                            Write-Host ("[{0,-2}] {1,-15} {2,-30} {3,-35} {4,-15}" -f ($i + 1), $displayPub, $displayName, $displayId, $displayVer)
+                        }
+
+                        # Build dynamic prompt options
+                        $promptOptions = @()
+                        if ($currentPage -lt ($totalPage - 1)) { $promptOptions += "[N] Next Page" }
+                        if ($currentPage -gt 0) { $promptOptions += "[P] Previous Page" }
+                        $optionsStr = if ($promptOptions) { ", " + ($promptOptions -join " | ") } else { "" }
+
+                        $selection = Read-Host "`nEnter package number to install (1-$($results.Count))$optionsStr (or press Enter to cancel)"
+                        
+                        if ([string]::IsNullOrWhiteSpace($selection)) {
+                            Write-Host "Installation cancelled." -ForegroundColor Yellow
+                            $browsing = $false
+                        }
+                        elseif ($selection -ieq "n" -and $currentPage -lt ($totalPage - 1)) {
+                            $currentPage++
+                        }
+                        elseif ($selection -ieq "p" -and $currentPage -gt 0) {
+                            $currentPage--
+                        }
+                        elseif ($selection -match '^\d+$') {
                             $idx = [int]$selection - 1
-                            if ($idx -ge 0 -and $idx -lt $displayCount) {
+                            if ($idx -ge 0 -and $idx -lt $results.Count) {
                                 $selectedPackage = $results[$idx]
                                 Write-Host "`nAttempting to install '$($selectedPackage.Name)' ($($selectedPackage.Id))..." -ForegroundColor Yellow
                                 Try {
@@ -384,14 +409,14 @@ while ($continueActions) {
                                 Catch {
                                     Write-Host "Failed to install '$($selectedPackage.Name)'. Error: $($_.Exception.Message)" -ForegroundColor Red
                                 }
+                                $browsing = $false
                             } else {
-                                Write-Host "Invalid selection. Please choose a number between 1 and $displayCount." -ForegroundColor Red
+                                Write-Host "Invalid selection. Please choose a number between 1 and $($results.Count)." -ForegroundColor Red
                             }
-                        } else {
-                            Write-Host "Invalid input. Please enter a number." -ForegroundColor Red
                         }
-                    } else {
-                        Write-Host "Installation cancelled." -ForegroundColor Yellow
+                        else {
+                            Write-Host "Invalid option." -ForegroundColor Red
+                        }
                     }
                 }
             } else {
