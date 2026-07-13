@@ -118,6 +118,85 @@ function Uninstall-Package {
     }
 }
 
+function Search-WingetPackage {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Query
+    )
+
+    # Run winget search and capture output as stream
+    $rawOutput = & ".\winget.exe" search $Query --accept-source-agreements --disable-interactivity 2>&1 | Out-String -Stream
+    $lines = $rawOutput | Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace($_) }
+
+    if (-not $lines) { return $null }
+
+    # Find the separator line (composed of dashes/spaces)
+    $separatorIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^[- ]+$') {
+            $separatorIndex = $i
+            break
+        }
+    }
+
+    if ($separatorIndex -le 0) { return $null }
+
+    # Preceding line contains headers
+    $headerLine = $lines[$separatorIndex - 1]
+    $headers = $headerLine -split '\s{2,}' | Where-Object { $_ }
+
+    # Map column headers to starting indexes
+    $columns = @()
+    for ($i = 0; $i -lt $headers.Count; $i++) {
+        $headerName = $headers[$i]
+        $index = $headerLine.IndexOf($headerName)
+        $columns += [PSCustomObject]@{
+            Name = $headerName
+            StartIndex = $index
+        }
+    }
+
+    # Assign column lengths for Substring parsing
+    for ($i = 0; $i -lt $columns.Count; $i++) {
+        if ($i -lt ($columns.Count - 1)) {
+            $columns[$i] | Add-Member -MemberType NoteProperty -Name "Length" -Value ($columns[$i+1].StartIndex - $columns[$i].StartIndex)
+        } else {
+            $columns[$i] | Add-Member -MemberType NoteProperty -Name "Length" -Value -1
+        }
+    }
+
+    # Parse rows into objects
+    $results = @()
+    for ($i = $separatorIndex + 1; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        # Ignore warning/error lines
+        if ($line.StartsWith("The msstore") -or $line.StartsWith("Failed to")) { continue }
+
+        $row = [ordered]@{}
+        foreach ($col in $columns) {
+            if ($line.Length -gt $col.StartIndex) {
+                if ($col.Length -eq -1) {
+                    $val = $line.Substring($col.StartIndex).Trim()
+                } else {
+                    $len = [Math]::Min($col.Length, $line.Length - $col.StartIndex)
+                    $val = $line.Substring($col.StartIndex, $len).Trim()
+                }
+            } else {
+                $val = ""
+            }
+            # Normalize property names
+            $norm = $col.Name
+            if ($col.Name -ieq "id") { $norm = "Id" }
+            elseif ($col.Name -ieq "name") { $norm = "Name" }
+            elseif ($col.Name -ieq "version") { $norm = "Version" }
+            elseif ($col.Name -ieq "source") { $norm = "Source" }
+            $row[$norm] = $val
+        }
+        $results += [PSCustomObject]$row
+    }
+    return $results
+}
+
 # Command-line argument handling
 if ($args.Count -gt 0) {
     $command = $args[0].TrimStart('/','-').ToLower()
@@ -237,23 +316,86 @@ while ($continueActions) {
         "3" {
             # --- Section for Installing Software ---
             Write-Host "`n--- Installing Winget Package ---" -ForegroundColor Cyan
-            Write-Host "Enter the package ID or Name you wish to install." -ForegroundColor DarkCyan
+            
+            # Prompt the user for the package search term
+            $SearchQuery = Read-Host "Enter search term for the package you want to install (e.g. Chrome, Discord)"
 
-            # Prompt the user for the package to install
-            $PackageToInstall = Read-Host "Enter the 'Id' or 'Name' of the package you want to install (or press Enter to skip installation)"
-
-            if (-not [string]::IsNullOrWhiteSpace($PackageToInstall)) {
-                Write-Host "Attempting to install '$PackageToInstall'..." -ForegroundColor Yellow
-                Try {
-                    & ".\winget.exe" install "$PackageToInstall" -e --accept-source-agreements -h --disable-interactivity
-                    Write-Host "Successfully initiated install for '$PackageToInstall'." -ForegroundColor Green
+            if (-not [string]::IsNullOrWhiteSpace($SearchQuery)) {
+                Write-Host "Searching for '$SearchQuery'..." -ForegroundColor Yellow
+                $results = Search-WingetPackage -Query $SearchQuery
+                
+                if (-not $results -or $results.Count -eq 0) {
+                    Write-Host "No packages found matching '$SearchQuery'." -ForegroundColor Red
                 }
-                Catch {
-                    Write-Host "Failed to install '$PackageToInstall'. Error: $($_.Exception.Message)" -ForegroundColor Red
-                    Write-Host "Ensure the package ID/name is correct and available in Winget." -ForegroundColor Red
+                elseif ($results.Count -eq 1) {
+                    $selectedPackage = $results[0]
+                    Write-Host "`nFound 1 match:" -ForegroundColor Cyan
+                    Write-Host "Name:    $($selectedPackage.Name)"
+                    Write-Host "Id:      $($selectedPackage.Id)"
+                    Write-Host "Version: $($selectedPackage.Version)"
+                    
+                    $confirm = Read-Host "`nDo you want to install this package? (Y/N)"
+                    if ($confirm -match "^[yY]") {
+                        Write-Host "Attempting to install '$($selectedPackage.Name)' ($($selectedPackage.Id))..." -ForegroundColor Yellow
+                        Try {
+                            & ".\winget.exe" install "$($selectedPackage.Id)" -e --accept-source-agreements -h --disable-interactivity
+                            Write-Host "Successfully initiated install for '$($selectedPackage.Name)'." -ForegroundColor Green
+                        }
+                        Catch {
+                            Write-Host "Failed to install '$($selectedPackage.Name)'. Error: $($_.Exception.Message)" -ForegroundColor Red
+                        }
+                    } else {
+                        Write-Host "Installation cancelled." -ForegroundColor Yellow
+                    }
+                }
+                else {
+                    Write-Host "`nMatches found for '$SearchQuery':`n" -ForegroundColor Cyan
+                    # Print formatted table header
+                    Write-Host ("{0,-4} {1,-35} {2,-35} {3,-15}" -f "#", "Name", "Id", "Version") -ForegroundColor Yellow
+                    Write-Host ("{0,-4} {1,-35} {2,-35} {3,-15}" -f "-", "----", "--", "-------") -ForegroundColor Yellow
+
+                    # Display up to 30 top matches
+                    $displayCount = [Math]::Min($results.Count, 30)
+                    for ($i = 0; $i -lt $displayCount; $i++) {
+                        $r = $results[$i]
+                        # Truncate strings to prevent wrapping/misalignment
+                        $displayName = if ($r.Name.Length -gt 33) { $r.Name.Substring(0, 30) + "..." } else { $r.Name }
+                        $displayId = if ($r.Id.Length -gt 33) { $r.Id.Substring(0, 30) + "..." } else { $r.Id }
+                        $displayVer = if ($r.Version.Length -gt 13) { $r.Version.Substring(0, 10) + "..." } else { $r.Version }
+
+                        Write-Host ("[{0,-2}] {1,-35} {2,-35} {3,-15}" -f ($i + 1), $displayName, $displayId, $displayVer)
+                    }
+                    
+                    if ($results.Count -gt 30) {
+                        Write-Host "...and $($results.Count - 30) more matches." -ForegroundColor DarkCyan
+                    }
+
+                    $selection = Read-Host "`nEnter the number of the package you want to install (or press Enter to cancel)"
+                    if (-not [string]::IsNullOrWhiteSpace($selection)) {
+                        if ($selection -match '^\d+$') {
+                            $idx = [int]$selection - 1
+                            if ($idx -ge 0 -and $idx -lt $displayCount) {
+                                $selectedPackage = $results[$idx]
+                                Write-Host "`nAttempting to install '$($selectedPackage.Name)' ($($selectedPackage.Id))..." -ForegroundColor Yellow
+                                Try {
+                                    & ".\winget.exe" install "$($selectedPackage.Id)" -e --accept-source-agreements -h --disable-interactivity
+                                    Write-Host "Successfully initiated install for '$($selectedPackage.Name)'." -ForegroundColor Green
+                                }
+                                Catch {
+                                    Write-Host "Failed to install '$($selectedPackage.Name)'. Error: $($_.Exception.Message)" -ForegroundColor Red
+                                }
+                            } else {
+                                Write-Host "Invalid selection. Please choose a number between 1 and $displayCount." -ForegroundColor Red
+                            }
+                        } else {
+                            Write-Host "Invalid input. Please enter a number." -ForegroundColor Red
+                        }
+                    } else {
+                        Write-Host "Installation cancelled." -ForegroundColor Yellow
+                    }
                 }
             } else {
-                Write-Host "No package specified for installation. Skipping installation." -ForegroundColor Yellow
+                Write-Host "No search query entered. Skipping installation." -ForegroundColor Yellow
             }
         }
         "4" {
