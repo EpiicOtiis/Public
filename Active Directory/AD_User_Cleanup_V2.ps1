@@ -112,16 +112,19 @@ Function Write-ProtectedAccountsStatus {
 Function Get-BitLockerRecoveryKeys {
     Param([string]$ComputerDN)
     try {
-        # SearchBase must be a DN, so we keep this as is
-        $Keys = Get-ADObject -Filter {objectClass -eq 'msFVE-RecoveryInformation'} -SearchBase $ComputerDN -Properties msFVE-RecoveryPassword, whenCreated
+        if ([string]::IsNullOrWhiteSpace($ComputerDN)) { return $null }
+
+        $Keys = Get-ADObject -SearchBase $ComputerDN -SearchScope OneLevel -LDAPFilter "(objectClass=msFVE-RecoveryInformation)" -Properties msFVE-RecoveryPassword, whenCreated, Name -ErrorAction Stop
         return $Keys | ForEach-Object {
             [PSCustomObject]@{
                 Created     = $_.whenCreated
                 RecoveryKey = $_."msFVE-RecoveryPassword"
-                KeyID       = $_.Name -replace '\{|\}' -replace '^[^-]*-'
+                KeyID       = $_.Name -replace '\{\}|\}' -replace '^[^-]*-'
             }
         }
-    } catch { return $null }
+    } catch {
+        return $null
+    }
 }
 
 Function Get-ObjectSnapshot {
@@ -241,7 +244,8 @@ Function Get-SafeADData {
     
     return $Raw | ForEach-Object {
         $Role = "Workstation"; if ($_.PrimaryGroupID -eq 516) { $Role = "Domain Controller" } elseif ($_.OperatingSystem -like "*Server*") { $Role = "Member Server" }
-        $BLCount = (Get-ADObject -Filter {objectClass -eq 'msFVE-RecoveryInformation'} -SearchBase $_.DistinguishedName).Count
+        $Keys = Get-BitLockerRecoveryKeys -ComputerDN $_.DistinguishedName
+        $BLCount = @($Keys).Count
         
         $RawExp = $_."msDS-UserPasswordExpiryTimeComputed"
         $PassExp = if ($RawExp -le 0 -or $RawExp -eq 9223372036854775807) { "Never" } else { [datetime]::FromFileTime($RawExp) }
