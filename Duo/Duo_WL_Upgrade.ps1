@@ -2,7 +2,6 @@
 
 [CmdletBinding()]
 param(
-    [switch]$RunScheduledUpgrade,
     [string]$TaskName = 'DuoWLUpgradeDeferred'
 )
 
@@ -177,50 +176,40 @@ function Request-DeferredInstallTime {
 function New-DeferredUpgradeTask {
     param([string]$ScheduledTime)
 
-    $scriptPath = $PSCommandPath
-    if ([string]::IsNullOrWhiteSpace($scriptPath)) {
-        $scriptPath = $MyInvocation.MyCommand.Path
-    }
-
-    if (-not (Test-Path $scriptPath -ErrorAction SilentlyContinue)) {
-        throw "Script must be saved as a .ps1 file to schedule a task. Please save the script and try again."
-    }
-
     $selectedTime = [DateTime]::Parse($ScheduledTime)
     if ($selectedTime -le (Get-Date)) {
         $selectedTime = $selectedTime.AddDays(1)
     }
 
-    $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -RunScheduledUpgrade"
-    $taskTrigger = New-ScheduledTaskTrigger -Once -At $selectedTime -RandomDelay 00:05:00
+    # Create a self-contained script block that handles the download, install, and cleanup
+    $taskScript = @"
+`$ErrorActionPreference = 'Stop'
+`$TempDir = Join-Path `$env:TEMP 'DuoWLUpgrade'
+`$InstallerPath = Join-Path `$TempDir '$InstallerName'
+New-Item -ItemType Directory -Path `$TempDir -Force | Out-Null
+Invoke-WebRequest -Uri '$InstallerUrl' -OutFile `$InstallerPath -UseBasicParsing -TimeoutSec 300
+`$process = Start-Process -FilePath `$InstallerPath -ArgumentList '/S' -Wait -PassThru
+if (`$process.ExitCode -eq 0 -and (Test-Path `$TempDir)) {
+    Remove-Item -Path `$TempDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false -ErrorAction SilentlyContinue
+"@
 
+    # Convert the script to Base64 so it can run directly from the Task action
+    $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($taskScript))
+
+    $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -EncodedCommand $encodedCommand"
+    $taskTrigger = New-ScheduledTaskTrigger -Once -At $selectedTime -RandomDelay 00:05:00
     $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -Priority 4
 
     Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Description 'Deferred Duo Windows Login upgrade' -User 'SYSTEM' -RunLevel Highest | Out-Null
 
     Write-Host "Scheduled Duo upgrade for $($selectedTime.ToString('yyyy-MM-dd HH:mm'))."
-    Write-Host "The task '$TaskName' will run and remove itself after completion."
-}
-
-function Remove-DeferredUpgradeTask {
-    try {
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-        Write-Host "Removed scheduled task '$TaskName'."
-    }
-    catch {
-        Write-Verbose "No scheduled task was present to remove."
-    }
+    Write-Host "The task '$TaskName' will run silently and remove itself after completion."
 }
 
 try {
     $installInfo = Get-DuoInstallInfo
-
-    if ($RunScheduledUpgrade) {
-        Write-Host 'Running scheduled upgrade...'
-        Invoke-DuoInstaller -Url $InstallerUrl -Destination $InstallerPath
-        Remove-DeferredUpgradeTask
-        return
-    }
 
     if ($null -eq $installInfo) {
         Write-Host 'Duo Windows Login is not installed.'
