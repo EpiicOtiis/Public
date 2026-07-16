@@ -89,6 +89,11 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Zoom/Rem
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%20C%2B%2B%20Redistributables/Remove-VisualC.ps1 | iex
 ```
 
+- **Duo_WL_Upgrade.ps1**: Upgrades Duo Windows Login to the latest version.
+```powershell
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Duo/Duo_WL_Upgrade.ps1 | iex
+```
+
 - **WinGet_Combined_V1.ps1**: Wrapper/utility around `winget` to install, update, or uninstall packages and ensure `winget` is present; supports both interactive menu mode and command-line arguments.
 
   By default, it launches an interactive menu:
