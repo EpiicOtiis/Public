@@ -233,18 +233,29 @@ try {
     Write-Host "Installed application: $($installInfo.DisplayName)"
     Write-Host "Installed version: $($installInfo.DisplayVersion)"
 
-    if (Test-DuoVersionRequiresManualUpgrade -Version $installInfo.DisplayVersion) {
-        Write-Host 'The installed version is older than 4.x or could not be confirmed. Manual review is recommended before proceeding.'
-        $laterChoice = Read-Host 'Would you like to schedule this upgrade for a later time? [Y/N]'
-        if ($laterChoice -match '^(y|yes)$') {
+    Write-Host ''
+    Write-Host 'Choose an action:'
+    Write-Host '[1] Install now'
+    Write-Host '[2] Install later'
+    Write-Host '[3] Exit'
+
+    $selection = Read-Host 'Enter your selection'
+
+    switch ($selection) {
+        '1' {
+            Invoke-DuoInstaller -Url $InstallerUrl -Destination $InstallerPath
+        }
+        '2' {
             $scheduledTime = Request-DeferredInstallTime
             New-DeferredUpgradeTask -ScheduledTime $scheduledTime
         }
-        return
+        '3' {
+            Write-Host 'No action taken.'
+        }
+        default {
+            Write-Host 'Invalid selection. No action taken.'
+        }
     }
-
-    Write-Host 'The installed version is 4.x or newer. Proceeding with the upgrade.'
-    Invoke-DuoInstaller -Url $InstallerUrl -Destination $InstallerPath
 }
 catch {
     Write-Error $_.Exception.Message
