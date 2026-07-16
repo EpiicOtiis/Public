@@ -1,3 +1,5 @@
+#Requires -RunAsAdministrator
+
 [CmdletBinding()]
 param(
     [switch]$RunScheduledUpgrade,
@@ -118,29 +120,13 @@ function Get-DuoInstallInfo {
     }
 }
 
-function Test-DuoVersionRequiresManualUpgrade {
-    param([string]$Version)
-
-    if ([string]::IsNullOrWhiteSpace($Version)) {
-        return $true
-    }
-
-    try {
-        $parsed = [Version]$Version
-        return $parsed.Major -lt 4
-    }
-    catch {
-        return $true
-    }
-}
-
 function Invoke-DuoInstaller {
     param([string]$Url, [string]$Destination)
 
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
     Write-Host "Downloading Duo Windows Login installer to $Destination..."
-    Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing
+    Invoke-WebRequest -Uri $Url -OutFile $Destination -UseBasicParsing -TimeoutSec 300
 
     if (-not (Test-Path $Destination)) {
         throw "Installer download failed."
@@ -154,6 +140,10 @@ function Invoke-DuoInstaller {
     }
 
     Write-Host 'Duo Windows Login upgrade completed successfully.'
+    
+    if (Test-Path $TempDir) {
+        Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Request-DeferredInstallTime {
@@ -164,14 +154,21 @@ function Request-DeferredInstallTime {
         Write-Host ("[{0}] {1}" -f $i, $hours[$i])
     }
 
-    $choice = Read-Host 'Enter the number for the desired hour'
-    if ($choice -notmatch '^\d+$') {
-        throw 'Invalid selection.'
-    }
-
-    $index = [int]$choice
-    if ($index -lt 0 -or $index -ge $hours.Count) {
-        throw 'Selection out of range.'
+    $validChoice = $false
+    $index = -1
+    
+    while (-not $validChoice) {
+        $choice = Read-Host 'Enter the number for the desired hour'
+        if ($choice -match '^\d+$') {
+            $index = [int]$choice
+            if ($index -ge 0 -and $index -lt $hours.Count) {
+                $validChoice = $true
+            } else {
+                Write-Warning 'Selection out of range. Please try again.'
+            }
+        } else {
+            Write-Warning 'Invalid selection. Please enter a valid number.'
+        }
     }
 
     return $hours[$index]
@@ -185,6 +182,10 @@ function New-DeferredUpgradeTask {
         $scriptPath = $MyInvocation.MyCommand.Path
     }
 
+    if (-not (Test-Path $scriptPath -ErrorAction SilentlyContinue)) {
+        throw "Script must be saved as a .ps1 file to schedule a task. Please save the script and try again."
+    }
+
     $selectedTime = [DateTime]::Parse($ScheduledTime)
     if ($selectedTime -le (Get-Date)) {
         $selectedTime = $selectedTime.AddDays(1)
@@ -193,7 +194,7 @@ function New-DeferredUpgradeTask {
     $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -RunScheduledUpgrade"
     $taskTrigger = New-ScheduledTaskTrigger -Once -At $selectedTime -RandomDelay 00:05:00
 
-    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingToSleep -StartWhenAvailable -ExecuteExpiredTaskImmediately -Priority 4
+    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -StartWhenAvailable -Priority 4
 
     Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings -Description 'Deferred Duo Windows Login upgrade' -User 'SYSTEM' -RunLevel Highest | Out-Null
 
