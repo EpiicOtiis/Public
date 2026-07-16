@@ -11,18 +11,30 @@ $TempDir = Join-Path $env:TEMP 'DuoWLUpgrade'
 $InstallerPath = Join-Path $TempDir $InstallerName
 
 function Get-DuoInstallInfo {
-    $candidates = @()
+    $candidates = New-Object System.Collections.Generic.List[object]
 
     $uninstallPaths = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
 
     foreach ($path in $uninstallPaths) {
         try {
             $items = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
             if ($null -ne $items) {
-                $candidates += $items | Where-Object { $_.DisplayName -match 'Duo' }
+                foreach ($item in $items) {
+                    if ($item.DisplayName -and ($item.DisplayName -match 'Duo' -or $item.DisplayName -match 'Windows Logon')) {
+                        $candidates.Add([pscustomobject]@{
+                            DisplayName = $item.DisplayName
+                            DisplayVersion = $item.DisplayVersion
+                            InstallLocation = $item.InstallLocation
+                            Publisher = $item.Publisher
+                            UninstallString = $item.UninstallString
+                            Source = 'Registry'
+                        })
+                    }
+                }
             }
         }
         catch {
@@ -30,21 +42,79 @@ function Get-DuoInstallInfo {
         }
     }
 
+    $programRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    foreach ($root in $programRoots) {
+        if (-not (Test-Path $root)) {
+            continue
+        }
+
+        foreach ($folder in Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'Duo' }) {
+            $exeFiles = Get-ChildItem -Path $folder.FullName -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'duo' -or $_.Name -match 'Duo' }
+            foreach ($exeFile in $exeFiles) {
+                try {
+                    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exeFile.FullName)
+                    if ($versionInfo -and $versionInfo.FileVersion) {
+                        $candidates.Add([pscustomobject]@{
+                            DisplayName = 'Duo Windows Login'
+                            DisplayVersion = $versionInfo.FileVersion
+                            InstallLocation = $folder.FullName
+                            Publisher = 'Duo Security'
+                            UninstallString = ''
+                            Source = 'FileVersion'
+                        })
+                    }
+                }
+                catch {
+                    continue
+                }
+            }
+        }
+    }
+
     if ($candidates.Count -eq 0) {
         return $null
     }
 
-    $match = $candidates | Sort-Object { [Version]::Parse($_.DisplayVersion) } -Descending | Select-Object -First 1
-    if ($null -eq $match) {
-        return $null
+    $bestMatch = $null
+    $bestVersion = $null
+
+    foreach ($candidate in $candidates) {
+        $parsedVersion = $null
+        try {
+            $parsedVersion = [Version]$candidate.DisplayVersion
+        }
+        catch {
+            $parsedVersion = $null
+        }
+
+        if ($null -eq $parsedVersion) {
+            continue
+        }
+
+        if ($null -eq $bestVersion -or $parsedVersion -gt $bestVersion) {
+            $bestMatch = $candidate
+            $bestVersion = $parsedVersion
+        }
     }
 
-    [pscustomobject]@{
-        DisplayName = $match.DisplayName
-        DisplayVersion = $match.DisplayVersion
-        InstallLocation = $match.InstallLocation
-        Publisher = $match.Publisher
-        UninstallString = $match.UninstallString
+    if ($null -ne $bestMatch) {
+        return [pscustomobject]@{
+            DisplayName = $bestMatch.DisplayName
+            DisplayVersion = $bestMatch.DisplayVersion
+            InstallLocation = $bestMatch.InstallLocation
+            Publisher = $bestMatch.Publisher
+            UninstallString = $bestMatch.UninstallString
+            Source = $bestMatch.Source
+        }
+    }
+
+    return [pscustomobject]@{
+        DisplayName = $candidates[0].DisplayName
+        DisplayVersion = $candidates[0].DisplayVersion
+        InstallLocation = $candidates[0].InstallLocation
+        Publisher = $candidates[0].Publisher
+        UninstallString = $candidates[0].UninstallString
+        Source = $candidates[0].Source
     }
 }
 
@@ -52,7 +122,7 @@ function Test-DuoVersionRequiresManualUpgrade {
     param([string]$Version)
 
     if ([string]::IsNullOrWhiteSpace($Version)) {
-        return $false
+        return $true
     }
 
     try {
@@ -60,7 +130,7 @@ function Test-DuoVersionRequiresManualUpgrade {
         return $parsed.Major -lt 4
     }
     catch {
-        return $false
+        return $true
     }
 }
 
@@ -164,7 +234,7 @@ try {
     Write-Host "Installed version: $($installInfo.DisplayVersion)"
 
     if (Test-DuoVersionRequiresManualUpgrade -Version $installInfo.DisplayVersion) {
-        Write-Host 'The installed version is 1.x, 2.x, or 3.x. Manual upgrade is required before continuing.'
+        Write-Host 'The installed version is older than 4.x or could not be confirmed. Manual review is recommended before proceeding.'
         $laterChoice = Read-Host 'Would you like to schedule this upgrade for a later time? [Y/N]'
         if ($laterChoice -match '^(y|yes)$') {
             $scheduledTime = Request-DeferredInstallTime
