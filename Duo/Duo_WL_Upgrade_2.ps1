@@ -1,3 +1,5 @@
+# Duo Windows Logon Upgrade Script, this one is not interactive and will run silently. It checks if Duo is installed, compares the installed version with the latest available version, and upgrades if necessary. It will pause at the end to allow the user to read the output.
+
 # Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
 
@@ -59,7 +61,7 @@ Read-Host "Press Enter to exit"
 
 
 
-
+# Rmm ready version of the above script. This version does not pause at the end and is suitable for remote execution.
 
 # Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
