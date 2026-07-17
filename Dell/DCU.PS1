@@ -1,9 +1,14 @@
 # Define the path to the DCU CLI
 $dcuPath = "C:\Program Files\Dell\CommandUpdate\dcu-cli.exe"
 
-# DCU requires a DIRECTORY for the report argument. 
-# It will automatically generate a file named "DCUApplicableUpdates.xml" in this folder.
-$reportDir = $env:TEMP
+# Define a safe, non-reserved directory for the report (Bypasses the 107 error)
+$reportDir = "C:\ProgramData\DCU_ScriptTemp"
+
+# Create the directory if it doesn't exist
+if (-not (Test-Path $reportDir)) {
+    New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+}
+
 $reportPath = Join-Path -Path $reportDir -ChildPath "DCUApplicableUpdates.xml"
 
 # Check if Dell Command Update is installed
@@ -18,7 +23,8 @@ Write-Host "Scanning for available updates. This may take a few minutes..." -For
 if (Test-Path $reportPath) { Remove-Item $reportPath -Force }
 
 # Run the scan (-NoNewWindow stops the popup, -Wait pauses the script until the scan is done)
-$scanProcess = Start-Process -FilePath $dcuPath -ArgumentList "/scan -silent -report=`"$reportDir`"" -NoNewWindow -Wait -PassThru
+# Note: Added -updateType restriction here to avoid self-updating issues, remove if you want DCU to update itself.
+$scanProcess = Start-Process -FilePath $dcuPath -ArgumentList "/scan -silent -updateType=bios,driver,firmware -report=`"$reportDir`"" -NoNewWindow -Wait -PassThru
 
 # Check if the report was successfully created
 if (Test-Path $reportPath) {
@@ -49,7 +55,7 @@ if (Test-Path $reportPath) {
             Write-Host "`nInstalling updates... Please wait." -ForegroundColor Cyan
             
             # Apply updates
-            $installProcess = Start-Process -FilePath $dcuPath -ArgumentList "/applyUpdates -silent -reboot=disable" -NoNewWindow -Wait -PassThru
+            $installProcess = Start-Process -FilePath $dcuPath -ArgumentList "/applyUpdates -silent -updateType=bios,driver,firmware -reboot=disable" -NoNewWindow -Wait -PassThru
             
             if ($installProcess.ExitCode -eq 2) {
                 Write-Host "Updates installed successfully. A system REBOOT is required to complete the process." -ForegroundColor Yellow
@@ -65,5 +71,10 @@ if (Test-Path $reportPath) {
         Write-Host "`nYour system is up to date. No updates are currently available." -ForegroundColor Green
     }
 } else {
-    Write-Host "`nFailed to generate the update report. Ensure you are running PowerShell as an Administrator." -ForegroundColor Red
+    Write-Host "`nFailed to generate the update report. The DCU scan exited with code: $($scanProcess.ExitCode)" -ForegroundColor Red
+}
+
+# Optional Cleanup: Remove the temp directory after use
+if (Test-Path $reportDir) {
+    Remove-Item $reportDir -Recurse -Force
 }
