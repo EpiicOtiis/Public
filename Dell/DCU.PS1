@@ -1,8 +1,8 @@
 # Define the path to the DCU CLI
 $dcuPath = "C:\Program Files\Dell\CommandUpdate\dcu-cli.exe"
 
-# Define a safe, non-reserved directory for the report (Bypasses the 107 error)
-$reportDir = "C:\ProgramData\DCU_ScriptTemp"
+# Use the dedicated Integris folder to bypass DCU's "reserved folder" (Code 107) restriction
+$reportDir = "C:\Integris"
 
 # Create the directory if it doesn't exist
 if (-not (Test-Path $reportDir)) {
@@ -23,7 +23,6 @@ Write-Host "Scanning for available updates. This may take a few minutes..." -For
 if (Test-Path $reportPath) { Remove-Item $reportPath -Force }
 
 # Run the scan (-NoNewWindow stops the popup, -Wait pauses the script until the scan is done)
-# Note: Added -updateType restriction here to avoid self-updating issues, remove if you want DCU to update itself.
 $scanProcess = Start-Process -FilePath $dcuPath -ArgumentList "/scan -silent -updateType=bios,driver,firmware -report=`"$reportDir`"" -NoNewWindow -Wait -PassThru
 
 # Check if the report was successfully created
@@ -74,7 +73,7 @@ if (Test-Path $reportPath) {
     Write-Host "`nFailed to generate the update report. The DCU scan exited with code: $($scanProcess.ExitCode)" -ForegroundColor Red
 }
 
-# Optional Cleanup: Remove the temp directory after use
-if (Test-Path $reportDir) {
-    Remove-Item $reportDir -Recurse -Force
+# Optional Cleanup: Remove only the XML report to protect other files in C:\Integris
+if (Test-Path $reportPath) {
+    Remove-Item $reportPath -Force
 }
