@@ -1,8 +1,10 @@
 # Define the path to the DCU CLI
 $dcuPath = "C:\Program Files\Dell\CommandUpdate\dcu-cli.exe"
 
-# Define a temporary path for the scan report
-$reportPath = "$env:TEMP\DCU_Report.xml"
+# DCU requires a DIRECTORY for the report argument. 
+# It will automatically generate a file named "DCUApplicableUpdates.xml" in this folder.
+$reportDir = $env:TEMP
+$reportPath = Join-Path -Path $reportDir -ChildPath "DCUApplicableUpdates.xml"
 
 # Check if Dell Command Update is installed
 if (-not (Test-Path $dcuPath)) {
@@ -12,21 +14,21 @@ if (-not (Test-Path $dcuPath)) {
 
 Write-Host "Scanning for available updates. This may take a few minutes..." -ForegroundColor Cyan
 
-# Clean up any old reports
+# Clean up any old reports so we don't read outdated data
 if (Test-Path $reportPath) { Remove-Item $reportPath -Force }
 
-# Run the scan and generate an XML report (-Wait ensures PowerShell pauses until the scan finishes)
-$scanProcess = Start-Process -FilePath $dcuPath -ArgumentList "/scan -silent -report=$reportPath" -Wait -PassThru
+# Run the scan (-NoNewWindow stops the popup, -Wait pauses the script until the scan is done)
+$scanProcess = Start-Process -FilePath $dcuPath -ArgumentList "/scan -silent -report=`"$reportDir`"" -NoNewWindow -Wait -PassThru
 
 # Check if the report was successfully created
 if (Test-Path $reportPath) {
     # Cast the file content to an XML object
     [xml]$report = Get-Content $reportPath
     
-    # Extract the update nodes (DCU typically stores them under <Update> tags)
-    $updates = Select-Xml -Xml $report -XPath "//Update" | Select-Object -ExpandProperty Node
+    # Grab the updates (forced into an array in case there is only 1 update available)
+    $updates = @($report.updates.update)
     
-    if ($updates) {
+    if ($updates -and $updates.Count -gt 0) {
         Write-Host "`nFound $($updates.Count) available update(s):" -ForegroundColor Green
         Write-Host "------------------------------------------------"
         
@@ -46,8 +48,8 @@ if (Test-Path $reportPath) {
         if ($prompt -match "^[Yy]") {
             Write-Host "`nInstalling updates... Please wait." -ForegroundColor Cyan
             
-            # Apply updates (leaving reboot disabled here so your system doesn't restart unexpectedly)
-            $installProcess = Start-Process -FilePath $dcuPath -ArgumentList "/applyUpdates -silent -reboot=disable" -Wait -PassThru
+            # Apply updates
+            $installProcess = Start-Process -FilePath $dcuPath -ArgumentList "/applyUpdates -silent -reboot=disable" -NoNewWindow -Wait -PassThru
             
             if ($installProcess.ExitCode -eq 2) {
                 Write-Host "Updates installed successfully. A system REBOOT is required to complete the process." -ForegroundColor Yellow
@@ -63,5 +65,5 @@ if (Test-Path $reportPath) {
         Write-Host "`nYour system is up to date. No updates are currently available." -ForegroundColor Green
     }
 } else {
-    Write-Host "`nFailed to generate the update report. The scan may have failed or was interrupted." -ForegroundColor Red
+    Write-Host "`nFailed to generate the update report. Ensure you are running PowerShell as an Administrator." -ForegroundColor Red
 }
