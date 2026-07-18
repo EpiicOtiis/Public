@@ -1,0 +1,15 @@
+# Handle line endings automatically for files detected as text
+* text=auto
+
+# Explicitly declare text files you want to always normalize to LF on check-in
+*.js text eol=lf
+*.json text eol=lf
+*.py text eol=lf
+*.cfg text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+
+# Denote files that are truly binary and should not be modified
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
