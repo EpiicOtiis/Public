@@ -94,6 +94,11 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Visual%2
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Duo/Duo_WL_Upgrade.ps1 | iex
 ```
 
+- **YubiKey-PIV-Troubleshooter.ps1**: Guided menu-driven troubleshooter for YubiKey PIV operations on Windows, including prerequisite checks, PIN/PUK status review, PIN unblocking, PIV applet reset, and workstation reboot.
+```powershell
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/YubiKey/YubiKey-PIV-Troubleshooter.ps1 | iex
+```
+
 - **WinGet_Combined_V1.ps1**: Wrapper/utility around `winget` to install, update, or uninstall packages and ensure `winget` is present; supports both interactive menu mode and command-line arguments.
 
   By default, it launches an interactive menu:
