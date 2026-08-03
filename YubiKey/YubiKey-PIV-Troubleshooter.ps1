@@ -116,6 +116,40 @@ function Check-Prerequisites {
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
+function Search-UninstallMinidriverEvents {
+    Write-Host "`n=== Searching for Minidriver Uninstall Events ===" -ForegroundColor Cyan
+
+    $installedDriver = Get-ChildItem -Path @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall') -ErrorAction SilentlyContinue |
+        Get-ItemProperty -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -match "YubiKey Smart Card Minidriver" } |
+        Select-Object -First 1
+
+    if ($installedDriver) {
+        Write-Host "[OK] YubiKey Smart Card Minidriver is currently installed." -ForegroundColor Green
+        if ($installedDriver.DisplayVersion) {
+            Write-Host "Installed version: $($installedDriver.DisplayVersion)" -ForegroundColor Gray
+        }
+    } else {
+        Write-Host "[!] YubiKey Smart Card Minidriver is not currently installed." -ForegroundColor Yellow
+    }
+
+    $uninstallEvents = Get-WinEvent -FilterHashtable @{ LogName='Application'; ProviderName='MsiInstaller'; ID=@(1034, 11724) } -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -match "YubiKey Smart Card Minidriver" } |
+        Sort-Object TimeCreated -Descending
+
+    if ($uninstallEvents) {
+        Write-Host "`nFound uninstall-related events:" -ForegroundColor Yellow
+        foreach ($event in $uninstallEvents) {
+            Write-Host " - $($event.TimeCreated): $($event.Id) - $($event.Message.Trim())" -ForegroundColor DarkYellow
+        }
+    } else {
+        Write-Host "`nNo matching uninstall events were found in the Application log." -ForegroundColor Yellow
+    }
+
+    Write-Host "`nPress any key to return to menu..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
 function Show-Menu {
     Clear-Host
     Write-Host "===============================================" -ForegroundColor Cyan
@@ -125,8 +159,9 @@ function Show-Menu {
     Write-Host "2. Get PIV Info (Check PIN/PUK remaining tries)"
     Write-Host "3. Unblock PIN (Using Default PUK: 12345678)"
     Write-Host "4. Factory Reset PIV Applet (Wipes Certificate)"
-    Write-Host "5. Reboot Workstation"
-    Write-Host "6. Exit"
+    Write-Host "5. Search for uninstall Minidriver events"
+    Write-Host "6. Reboot Workstation"
+    Write-Host "7. Exit"
     Write-Host "===============================================" -ForegroundColor Cyan
 }
 
@@ -135,7 +170,7 @@ $menuRunning = $true
 
 while ($menuRunning) {
     Show-Menu
-    $selection = Read-Host "Enter your selection (1-6)"
+    $selection = Read-Host "Enter your selection (1-7)"
     
     # Ensure we always have the freshest tool paths dynamically
     Get-YkTools
@@ -211,13 +246,16 @@ while ($menuRunning) {
             $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         }
         "5" {
+            Search-UninstallMinidriverEvents
+        }
+        "6" {
             $confirmReboot = Read-Host "`nAre you sure you want to restart this computer now? (Y/N)"
             if ($confirmReboot -match "^y$|^yes$") {
                 Write-Host "Initiating reboot..." -ForegroundColor Yellow
                 Restart-Computer -Force
             }
         }
-        "6" {
+        "7" {
             Write-Host "`nExiting Troubleshooter. Have a good day!" -ForegroundColor Green
             $menuRunning = $false
         }
