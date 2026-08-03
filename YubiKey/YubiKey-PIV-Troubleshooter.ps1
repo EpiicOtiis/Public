@@ -146,6 +146,49 @@ function Search-UninstallMinidriverEvents {
         Write-Host "`nNo matching uninstall events were found in the Application log." -ForegroundColor Yellow
     }
 
+    Write-Host "`n=== Additional Event Log Checks ===" -ForegroundColor Cyan
+
+    Write-Host "`n[Application/System logs - last 30 days]" -ForegroundColor Yellow
+    Get-WinEvent -FilterHashtable @{
+        LogName   = 'Application', 'System'
+        StartTime = (Get-Date).AddDays(-30)
+    } -ErrorAction SilentlyContinue |
+    Where-Object { $_.Message -match 'yubi|minidriver' } |
+    Select-Object TimeCreated, LogName, ProviderName, Id, Message |
+    Format-Table -AutoSize
+
+    Write-Host "`n[MsiInstaller Application logs - last 30 days]" -ForegroundColor Yellow
+    Get-WinEvent -FilterHashtable @{
+        LogName      = 'Application'
+        ProviderName = 'MsiInstaller'
+        StartTime    = (Get-Date).AddDays(-30)
+    } -ErrorAction SilentlyContinue |
+    Where-Object { $_.Message -match 'yubi|minidriver' } |
+    Select-Object TimeCreated, Id, Message |
+    Format-List
+
+    Write-Host "`n[Smart Card logs - last 30 days]" -ForegroundColor Yellow
+    $scLogs = (Get-WinEvent -ListLog *SmartCard* -ErrorAction SilentlyContinue).LogName
+    if ($scLogs) {
+        Get-WinEvent -FilterHashtable @{
+            LogName   = $scLogs
+            StartTime = (Get-Date).AddDays(-30)
+        } -ErrorAction SilentlyContinue |
+        Select-Object TimeCreated, LogName, Id, Message |
+        Out-GridView -Title "SmartCard Event Logs"
+    } else {
+        Write-Host "No Smart Card event logs were found on this system." -ForegroundColor Yellow
+    }
+
+    Write-Host "`n[System logs - last 7 days]" -ForegroundColor Yellow
+    Get-WinEvent -FilterHashtable @{
+        LogName   = 'System'
+        StartTime = (Get-Date).AddDays(-7)
+    } -ErrorAction SilentlyContinue |
+    Where-Object { $_.Message -match 'Yubi|Minidriver|Smart Card|ScFilter' } |
+    Select-Object TimeCreated, ProviderName, Id, Message |
+    Format-List
+
     Write-Host "`nPress any key to return to menu..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
