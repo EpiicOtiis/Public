@@ -175,7 +175,7 @@ function Search-UninstallMinidriverEvents {
             StartTime = (Get-Date).AddDays(-30)
         } -ErrorAction SilentlyContinue |
         Select-Object TimeCreated, LogName, Id, Message |
-        Out-GridView -Title "SmartCard Event Logs"
+        Format-Table -AutoSize
     } else {
         Write-Host "No Smart Card event logs were found on this system." -ForegroundColor Yellow
     }
