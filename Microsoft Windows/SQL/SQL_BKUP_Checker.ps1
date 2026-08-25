@@ -1,7 +1,9 @@
-﻿# ====================================================================
-# SQL Server Backup Diagnostic Tool (Refactored)
-# ====================================================================
-# It automatically checks the last 7 days of SQL operations.
+﻿<#
+====================================================================
+SQL Server Backup Diagnostic Tool (Refactored)
+====================================================================
+It automatically checks the last 7 days of SQL operations.
+#>
 
 $DaysBack = 7
 $SqlInstance = 'localhost'
