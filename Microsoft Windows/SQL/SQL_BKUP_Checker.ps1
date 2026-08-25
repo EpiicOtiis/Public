@@ -9,7 +9,6 @@
     Run this script from a machine with access to the target SQL Server instance using Windows integrated security.
     Example usage: .\SQL_BKUP_Checker.ps1 -SqlInstance 'localhost' -DaysBack 14 -ShowGrid
 #>
-
 param([string]$SqlInstance = 'localhost', [int]$DaysBack = 7, [switch]$UseSystemAccount, [switch]$ShowGrid)
 
 if ($DaysBack -lt 1 -or $DaysBack -gt 365) {
