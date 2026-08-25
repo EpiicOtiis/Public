@@ -95,19 +95,7 @@ function Invoke-ScriptAsSystem {
 
     if (Test-Path $outputFile) {
         Write-Host "--- SYSTEM OUTPUT ($outputFile) ---"
-        Get-Content $outputFile | ForEach-Object { Write-Host $_ }
-    }
-
-    if (Test-Path $errorFile -and (Get-Content $errorFile).Length -gt 0) {
-        Write-Host '--- SYSTEM STDERR ---'
-        Get-Content $errorFile | ForEach-Object { Write-Host $_ }
-    }
-
-    & schtasks.exe /Delete /TN $taskName /F | Out-Null
-}
-
-function Write-Section {
-    param([string]$Title)
+            param([string]$SqlInstance = 'localhost', [int]$DaysBack = 7, [switch]$UseSystemAccount, [switch]$ShowGrid)
     Write-Host ''
     Write-Host ('=' * 80) -ForegroundColor DarkCyan
     Write-Host $Title -ForegroundColor Cyan

@@ -199,6 +199,7 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQL_BKUP_Checker.ps1))) -SqlInstance 'localhost' -DaysBack 7
 ```
+If the command still reports `[CmdletBinding()]` or `[Parameter(...)]`, GitHub is serving an older copy. Commit and push the updated script, then retry the command.
 
 # VMWare
 
