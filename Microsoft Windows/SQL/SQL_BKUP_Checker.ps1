@@ -83,7 +83,19 @@ function Invoke-ScriptAsSystem {
 
     if (Test-Path $outputFile) {
         Write-Host "--- SYSTEM OUTPUT ($outputFile) ---"
-            param([string]$SqlInstance = 'localhost', [int]$DaysBack = 7, [switch]$UseSystemAccount, [switch]$ShowGrid)
+        Get-Content $outputFile | ForEach-Object { Write-Host $_ }
+    }
+
+    if (Test-Path $errorFile -and (Get-Content $errorFile).Length -gt 0) {
+        Write-Host '--- SYSTEM STDERR ---'
+        Get-Content $errorFile | ForEach-Object { Write-Host $_ }
+    }
+
+    & schtasks.exe /Delete /TN $taskName /F | Out-Null
+}
+
+function Write-Section {
+    param([string]$Title)
     Write-Host ''
     Write-Host ('=' * 80) -ForegroundColor DarkCyan
     Write-Host $Title -ForegroundColor Cyan
@@ -111,8 +123,8 @@ function Get-OperatingSystemInfo {
 
 function Invoke-SqlQuery {
     param(
-        [Parameter(Mandatory)] [string]$Instance,
-        [Parameter(Mandatory)] [string]$Query
+        [string]$Instance,
+        [string]$Query
     )
 
     $connectionString = "Server=$Instance;Database=msdb;Integrated Security=True;Connect Timeout=15;"
@@ -289,8 +301,8 @@ SELECT @BackupDirectory AS BackupDirectory;
 
 function Analyze-BackupHealth {
     param(
-        [Parameter(Mandatory)] [System.Data.DataTable]$History,
-        [Parameter(Mandatory)] [int]$DaysBack
+        [System.Data.DataTable]$History,
+        [int]$DaysBack
     )
 
     $threshold = (Get-Date).AddDays(-$DaysBack)
@@ -330,7 +342,7 @@ function Analyze-BackupHealth {
 }
 
 function Test-BackupPathAvailability {
-    param([Parameter(Mandatory)] [string[]]$Paths)
+    param([string[]]$Paths)
 
     $results = @()
     foreach ($path in ($Paths | Sort-Object -Unique | Where-Object { $_ })) {
