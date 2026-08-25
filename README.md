@@ -197,13 +197,7 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 - **SQL_BKUP_Checker.ps1**: Generates a SQL Server backup diagnostic report covering event logs, backup history, SQL Agent jobs, and backup paths.
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQL_BKUP_Checker.ps1))) -SqlInstance 'localhost' -DaysBack 7
-```
-If the command still reports `[CmdletBinding()]` or `[Parameter(...)]`, GitHub is serving an older copy. Commit and push the updated script, then retry the command.
-
-To verify the downloaded copy before running it:
-```powershell
-(irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQL_BKUP_Checker.ps1) | Select-Object -First 31
+irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQLBCKUPCHK.ps1 | iex
 ```
 
 # VMWare
