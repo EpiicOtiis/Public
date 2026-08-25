@@ -1,11 +1,4 @@
-﻿<#
-====================================================================
-SQL Server Backup Diagnostic Tool (Refactored)
-====================================================================
-It automatically checks the last 7 days of SQL operations.
-#>
-
-$DaysBack = 7
+﻿$DaysBack = 7
 $SqlInstance = 'localhost'
 $StartTime = (Get-Date).AddDays(-$DaysBack)
 
@@ -14,7 +7,6 @@ function Write-Header {
     Write-Host "`n=== $Title ===" -ForegroundColor Cyan
 }
 
-# 1. Prerequisites Check
 Write-Header "Initialization & Prerequisites"
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -26,11 +18,34 @@ if (-not $isAdmin) {
 Write-Host "Target Instance : $SqlInstance"
 Write-Host "Timeframe       : Last $DaysBack Days (Since $StartTime)"
 
-# 2. SQL Helper Function
+# --- INTERACTIVE AUTHENTICATION PROMPT ---
+$SqlUsername = ''
+$SqlPassword = ''
+Write-Host ""
+$AuthChoice = Read-Host "Do you want to enter SQL Authentication credentials (e.g., SA)? (Y/N) [Default: N for Windows Auth]"
+
+if ($AuthChoice -match '^[Yy]') {
+    # Pops up a secure credential prompt
+    $Creds = Get-Credential -UserName "sa" -Message "Please enter your SQL Server credentials"
+    # GetNetworkCredential extracts the plain text values to pass to the SQL connection string
+    $SqlUsername = $Creds.GetNetworkCredential().UserName 
+    $SqlPassword = $Creds.GetNetworkCredential().Password
+    Write-Host "Proceeding with SQL Authentication for user: $SqlUsername" -ForegroundColor Green
+} else {
+    Write-Host "Proceeding with standard Windows Authentication..." -ForegroundColor Green
+}
+# -----------------------------------------
+
 Add-Type -AssemblyName System.Data
 function Invoke-SqlCmdQuery {
     param([string]$Query)
-    $connectionString = "Server=$SqlInstance;Database=master;Integrated Security=True;Connect Timeout=15;"
+    
+    if ($SqlUsername -and $SqlPassword) {
+        $connectionString = "Server=$SqlInstance;Database=master;User Id=$SqlUsername;Password=$SqlPassword;Connect Timeout=15;"
+    } else {
+        $connectionString = "Server=$SqlInstance;Database=master;Integrated Security=True;Connect Timeout=15;"
+    }
+    
     $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
     $command = $connection.CreateCommand()
     $command.CommandText = $Query
@@ -42,7 +57,7 @@ function Invoke-SqlCmdQuery {
         $adapter.Fill($table) | Out-Null
         return $table
     } catch {
-        Write-Warning "SQL Connection/Query Failed: $_"
+        Write-Warning "SQL Connection Failed: $($_.Exception.Message)"
         return $null
     } finally {
         if ($connection.State -eq 'Open') { $connection.Close() }
@@ -50,9 +65,8 @@ function Invoke-SqlCmdQuery {
     }
 }
 
-# 3. Analyze SQL Backup Event Logs (Focusing on Errors/Warnings)
 Write-Header "Windows Event Log Analysis (Last 7 Days)"
-$backupEventIds = @(3041, 3201, 18210, 18204, 12291, 3013, 3047) # Primary failure/error IDs
+$backupEventIds = @(3041, 3201, 18210, 18204, 12291, 3013, 3047)
 try {
     $events = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = $backupEventIds; StartTime = $StartTime } -ErrorAction Stop
     $sqlEvents = $events | Where-Object { $_.ProviderName -match 'SQL' }
@@ -68,7 +82,6 @@ try {
     Write-Host "No backup error events found, or unable to read Application log." -ForegroundColor Yellow
 }
 
-# 4. Check Backup History in MSDB
 Write-Header "Database Backup Status (MSDB History)"
 $historyQuery = @"
 WITH LatestBackups AS (
@@ -101,7 +114,6 @@ if ($dbStatus) {
         $lastFull = $row.LastFullBackup
         $lastLog = $row.LastLogBackup
 
-        # Skip offline databases
         if ($state -ne 'ONLINE') { continue }
 
         $issue = ""
@@ -127,10 +139,9 @@ if ($dbStatus) {
         Write-Host "All ONLINE databases have current backups within the last $DaysBack days." -ForegroundColor Green
     }
 } else {
-    Write-Warning "Could not query backup history. Check SQL permissions or connection."
+    Write-Host "Skipping MSDB history due to connection error." -ForegroundColor Yellow
 }
 
-# 5. SQL Agent Backup Jobs Check
 Write-Header "SQL Agent Backup Job Failures"
 $jobsQuery = @"
 SELECT 
@@ -140,7 +151,7 @@ SELECT
     h.message
 FROM msdb.dbo.sysjobhistory h
 JOIN msdb.dbo.sysjobs j ON h.job_id = j.job_id
-WHERE h.run_status = 0 -- 0 means Failed
+WHERE h.run_status = 0
   AND (j.name LIKE '%Backup%' OR h.message LIKE '%BACKUP%')
   AND msdb.dbo.agent_datetime(h.run_date, h.run_time) >= GETDATE() - $DaysBack
 ORDER BY h.run_date DESC, h.run_time DESC;
@@ -150,7 +161,7 @@ $failedJobs = Invoke-SqlCmdQuery -Query $jobsQuery
 if ($failedJobs -and $failedJobs.Rows.Count -gt 0) {
     Write-Host "Found $($failedJobs.Rows.Count) failed backup job executions in the last $DaysBack days:" -ForegroundColor Red
     $failedJobs | Select-Object JobName, run_date, @{Name='ErrorMessage';Expression={$_.message -replace "`r`n", " "}} | Format-Table -AutoSize -Wrap
-} else {
+} elseif ($null -ne $failedJobs) {
     Write-Host "No failed SQL Agent backup jobs detected in the last $DaysBack days." -ForegroundColor Green
 }
 
