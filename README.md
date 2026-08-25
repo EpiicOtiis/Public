@@ -201,6 +201,11 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 ```
 If the command still reports `[CmdletBinding()]` or `[Parameter(...)]`, GitHub is serving an older copy. Commit and push the updated script, then retry the command.
 
+To verify the downloaded copy before running it:
+```powershell
+(irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQL_BKUP_Checker.ps1) | Select-Object -First 31
+```
+
 # VMWare
 
 ## Tools

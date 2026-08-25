@@ -10,19 +10,7 @@
     Example usage: .\SQL_BKUP_Checker.ps1 -SqlInstance 'localhost' -DaysBack 14 -ShowGrid
 #>
 
-param(
-    [string]
-    $SqlInstance = 'localhost',
-
-    [int]
-    $DaysBack = 7,
-
-    [switch]
-    $UseSystemAccount,
-
-    [switch]
-    $ShowGrid
-)
+param([string]$SqlInstance = 'localhost', [int]$DaysBack = 7, [switch]$UseSystemAccount, [switch]$ShowGrid)
 
 if ($DaysBack -lt 1 -or $DaysBack -gt 365) {
     throw 'DaysBack must be between 1 and 365.'
