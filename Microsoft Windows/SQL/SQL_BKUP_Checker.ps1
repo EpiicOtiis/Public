@@ -1,4 +1,6 @@
-﻿$DaysBack = 7
+﻿<# SQL Checker#>
+
+$DaysBack = 7
 $SqlInstance = 'localhost'
 $StartTime = (Get-Date).AddDays(-$DaysBack)
 
