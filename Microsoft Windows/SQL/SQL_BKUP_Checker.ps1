@@ -51,7 +51,9 @@ function Invoke-ScriptAsSystem {
     }
 
     $scriptArgsString = $scriptArgs -join ' '
-    $taskCommand = "powershell.exe $scriptArgsString > `"$outputFile`" 2> `"$errorFile`""
+    
+    # FIX 1: Wrap the command in cmd.exe /c so the Task Scheduler understands the > and 2> redirection operators
+    $taskCommand = "cmd.exe /c `"powershell.exe $scriptArgsString > `"$outputFile`" 2> `"$errorFile`"`""
 
     Write-Host "Re-launching script as SYSTEM via scheduled task '$taskName'..."
     $createArgs = @('/Create', '/TN', $taskName, '/SC', 'ONCE', '/ST', '00:00', '/RL', 'HIGHEST', '/F', '/RU', 'SYSTEM', '/TR', $taskCommand)
@@ -63,19 +65,22 @@ function Invoke-ScriptAsSystem {
 
     & schtasks.exe /Run /TN $taskName | Out-Null
     Write-Host 'Waiting for SYSTEM task to finish...'
+    
+    # FIX 2: Give the task a moment to transition from Ready to Running before starting the check loop
+    Start-Sleep -Seconds 2
+    
     $timeoutSeconds = 120
     $elapsed = 0
 
     while ($elapsed -lt $timeoutSeconds) {
-        Start-Sleep -Seconds 2
-        $elapsed += 2
         $query = & schtasks.exe /Query /TN $taskName /V /FO LIST 2>$null
         if ($query -match 'Status:\s*(.+)') {
             $status = $Matches[1].Trim()
-            if ($status -ne 'Running') { break }
-        } else {
-            break
+            # Stop waiting once the task finishes and returns to the Ready state
+            if ($status -eq 'Ready') { break }
         }
+        Start-Sleep -Seconds 2
+        $elapsed += 2
     }
 
     Write-Host "SYSTEM relaunch output file: $outputFile"
@@ -127,6 +132,9 @@ function Invoke-SqlQuery {
         [string]$Query
     )
 
+    # FIX 3: Explicitly load the System.Data assembly before trying to call the SQL Client
+    Add-Type -AssemblyName System.Data
+
     $connectionString = "Server=$Instance;Database=msdb;Integrated Security=True;Connect Timeout=15;"
     $connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
     $command = $connection.CreateCommand()
@@ -145,7 +153,9 @@ function Invoke-SqlQuery {
         if ($connection.State -eq 'Open') {
             $connection.Close()
         }
-        $connection.Dispose()
+        if ($null -ne $connection) {
+            $connection.Dispose()
+        }
     }
 }
 
@@ -320,7 +330,7 @@ function Analyze-BackupHealth {
             continue
         }
 
-        if (-not $lastFull) {
+        if (-not $lastFull -or $lastFull.GetType().Name -eq 'DBNull') {
             $findings += [PSCustomObject]@{ Database = $database; Issue = 'No full backup history found.' }
             continue
         }
@@ -330,7 +340,7 @@ function Analyze-BackupHealth {
         }
 
         if ($recovery -ne 'SIMPLE') {
-            if (-not $lastLog) {
+            if (-not $lastLog -or $lastLog.GetType().Name -eq 'DBNull') {
                 $findings += [PSCustomObject]@{ Database = $database; Issue = 'No log backup history found for a non-SIMPLE recovery model database.' }
             } elseif ($lastLog -lt $threshold) {
                 $findings += [PSCustomObject]@{ Database = $database; Issue = "Last log backup is older than $DaysBack days ($lastLog)." }
@@ -455,11 +465,14 @@ if ($backupPaths -and $backupPaths.Rows.Count -gt 0) {
 }
 
 $defaultBackupDir = Get-SqlDefaultBackupDirectory
-if ($defaultBackupDir -and $defaultBackupDir.Rows.Count -gt 0 -and $defaultBackupDir.BackupDirectory) {
+if ($defaultBackupDir -and $defaultBackupDir.Rows.Count -gt 0) {
     Write-Section 'Configured Default Backup Directory'
     $defaultBackupDir | Format-Table -AutoSize
-    $defaultPath = $defaultBackupDir.BackupDirectory[0]
-    if ($defaultPath) {
+    
+    # FIX 4: Safely extract the data from the DataTable row rather than relying on automatic unrolling
+    $defaultPath = $defaultBackupDir.Rows[0].BackupDirectory
+    
+    if ($defaultPath -and $defaultPath.GetType().Name -ne 'DBNull') {
         $defaultPathExists = Test-Path $defaultPath
         Write-Host "Default backup directory exists: $defaultPathExists"
         if ($defaultPathExists) {
