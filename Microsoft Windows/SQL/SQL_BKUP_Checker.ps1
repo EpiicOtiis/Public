@@ -10,25 +10,23 @@
     Example usage: .\SQL_BKUP_Checker.ps1 -SqlInstance 'localhost' -DaysBack 14 -ShowGrid
 #>
 
-[CmdletBinding()]
 param(
-    [Parameter(Position=0, HelpMessage='Target SQL Server instance name, for example localhost or SERVER\\INSTANCE.')]
     [string]
     $SqlInstance = 'localhost',
 
-    [Parameter(Position=1, HelpMessage='Number of days to search back for backup events and backup history.')]
-    [ValidateRange(1, 365)]
     [int]
     $DaysBack = 7,
 
-    [Parameter(HelpMessage='If present, the script relaunches under the SYSTEM account to access local SQL when available.')]
     [switch]
     $UseSystemAccount,
 
-    [Parameter(HelpMessage='If present, event and job findings are opened in Out-GridView.')]
     [switch]
     $ShowGrid
 )
+
+if ($DaysBack -lt 1 -or $DaysBack -gt 365) {
+    throw 'DaysBack must be between 1 and 365.'
+}
 
 function Get-IsSystemAccount {
     try {

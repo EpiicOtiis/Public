@@ -187,9 +187,17 @@ irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsof
 ```
 
 **Microsoft Defender**
-- **WEDHealth.ps1**: Health and update script for Microsoft Defender—checks services, versions, triggers signature updates, and assists with onboarding.
 ```powershell
 irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20365/Microsoft%20Defender/WEDHealth.ps1 | iex
+```
+
+# Microsoft Windows
+
+**SQL**
+- **SQL_BKUP_Checker.ps1**: Generates a SQL Server backup diagnostic report covering event logs, backup history, SQL Agent jobs, and backup paths.
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/EpiicOtiis/Public/refs/heads/main/Microsoft%20Windows/SQL/SQL_BKUP_Checker.ps1))) -SqlInstance 'localhost' -DaysBack 7
 ```
 
 # VMWare
